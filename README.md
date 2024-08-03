@@ -1,7 +1,7 @@
-![1  노벨피아 소설 페이지](https://github.com/user-attachments/assets/6de46560-f34c-4ccf-b348-f8190cdc12df)
+![1  노벨피아 소설 페이지](https://github.com/user-attachments/assets/12e80855-b3f5-41eb-bd34-95e72c6b05f1)
 
 # 개요
-노벨피아 소설의 번호를 입력받아 소설의 Metadata 를 크롤링한 뒤 Obsidian용 Markdown 파일로 출력합니다.
+노벨피아 소설의 번호를 입력받아 소설 메인 페이지에서 Metadata 를 크롤링한 뒤 Obsidian용 Markdown 파일로 출력합니다.
 
 # 특징
 - Python 100%. requests, BeautifulSoup 사용.
@@ -34,11 +34,11 @@
 # 출력 예시
 
 ## 터미널 스크린샷
-![2  코드 실행 결과](https://github.com/user-attachments/assets/1d2a355a-bc8c-4152-9ea0-149f8222edc0)
+![2  코드 실행 결과](https://github.com/user-attachments/assets/5929ee77-7120-48b4-be33-fe079afeb009)
 
 ## Markdown 파일
-[내가 쓰다 만 소설의 등장하지도 않는 성녀가 되어버렸다.md](https://github.com/user-attachments/files/16432711/default.md)
+[내가 쓰다 만 소설의 등장하지도 않는 성녀가 되어버렸다.md](https://github.com/user-attachments/files/16478359/default.md)
 
 ## Obsidian 스크린샷
-![3  Obsidan에서 연 Markdown 출력 파일](https://github.com/user-attachments/assets/3a0cc87f-7d33-4c8c-bb1d-0934293e132d)
+![3  Obsidan에서 연 Markdown 출력 파일](https://github.com/user-attachments/assets/911b366d-2ad0-4e1f-baf5-835bb35ef280)
 
