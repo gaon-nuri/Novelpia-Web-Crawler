@@ -1,5 +1,5 @@
-import os  # os.environ[]
 from datetime import date  # date.today()
+from urllib.parse import urljoin, urlparse
 
 from myPackage.module import *
 
@@ -12,7 +12,7 @@ def get_upload_date(novel_code: str, sort_method: str = "DOWN") -> str:
     :param sort_method: "DOWN", 첫화부터 / "UP", 최신화부터
     :return: 첫/마지막 회차 게시일
     """
-    ep_list_html = request_novel_ep_list(novel_code, sort_method)
+    ep_list_html = get_ep_list(novel_code, sort_method, 1)
     ep_list_soup = BeautifulSoup(ep_list_html, "html.parser")
 
     # 회차 게시일 추출
@@ -43,8 +43,6 @@ def extract_metadata(main_page_html: str) -> dict:
         "novel_page_url": "",
         "solePick": "",
         "tagList": ["",],
-        "fstUploadDate": "0000-00-00",
-        "lstUploadDate": "0000-00-00",
         "badge_dic": {x: False for x in [
                 "완결",
                 "연재지연",
@@ -68,6 +66,9 @@ def extract_metadata(main_page_html: str) -> dict:
         },
         "synopsis": ""
     }
+    metadata_dic.setdefault("fstUploadDate", "0000-00-00")
+    metadata_dic.setdefault("lstUploadDate", "0000-00-00")
+
     soup = BeautifulSoup(main_page_html, "html.parser")
 
     # 제목 추출
@@ -76,7 +77,11 @@ def extract_metadata(main_page_html: str) -> dict:
     # 소설 Main Webpage URL 추출
     # tag: <meta content="https://novelpia.com/novel/1" property="og:url"/>
     meta_url_tag = soup.select_one("meta[property='og:url']")
-    metadata_dic["novel_page_url"] = meta_url_tag.get("content")
+    novel_page_url: str = meta_url_tag.get("content")
+    metadata_dic["novel_page_url"] = novel_page_url
+
+    # 소설 번호 추출
+    novel_code: str = urlparse(novel_page_url).path.split("/")[-1]  # "https://novelpia.com/novel/1" > "1"
 
     # 소설 서비스 상태 확인
     # novel_info = soup.select_one(".epnew-novel-info")
@@ -145,21 +150,30 @@ def extract_metadata(main_page_html: str) -> dict:
         # 인생픽 순위 추출
         sole_pick_rank: str = soup.select(".counter-line-b span")[1].text
 
+        # 인생픽 순위 공개 중, 속성 추가
         if sole_pick_rank[-1] == "위":  # 40위
             metadata_dic["solePick"] = "\n인생픽: " + sole_pick_rank  # 인생픽: 40위 (Markdown 속성 문법)
 
-            # 선호, 알람, 회차수 추출
+        # 비공개 상태일 시 넘어가기
+        elif sole_pick_rank == "공개전":
+            pass
+
+        # 회차, 알람, 선호수 추출
         user_stat_li: list[str] = [i.string.replace(",", "") for i in soup.select("span.writer-name")]
         user_stat_li[2] = user_stat_li[2].replace("회차", "")  # 2538회차 > 2538
-        user_stat_li_int: list[int] = [int(user_stat) for user_stat in user_stat_li]
+        user_stat_li_int: list[int] = [int(user_stat) for user_stat in user_stat_li][::-1]
 
         metadata_dic["user_stat_dic"] = dict(zip(metadata_dic["user_stat_dic"].keys(), user_stat_li_int))
+
+        # 프롤로그 존재 시 회차 수 1 가산
+        # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
+        if has_prologue(novel_code):
+            metadata_dic["user_stat_dic"]["ep"] += 1
 
         # 줄거리 추출
         metadata_dic["synopsis"]: str = soup.select_one(".synopsis").text
 
-        novel_code: str = metadata_dic["novel_page_url"].split("/")[-1]  # "https://novelpia.com/novel/1" > "1"
-
+        # 공개 일자 추출
         metadata_dic["fstUploadDate"] = get_upload_date(novel_code, "DOWN")
         metadata_dic["lstUploadDate"] = get_upload_date(novel_code, "UP")
 
@@ -266,10 +280,10 @@ def main() -> None:
         print(f"예외 발생: {ke = }")
         print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요. Markdown 파일은 {novel_markdown_dir} 에 쓸게요.")
 
-    novel_code: str = str(ask_for_number("[입력] 소설 번호를 입력하세요"))
+    novel_code: str = str(ask_for_number("소설 번호"))
 
     novel_main_page_url: str = urljoin(base_url, novel_code)  # https://novelpia.com/novel/1
-    novel_main_page_html: str = request_novel_main_page(novel_main_page_url)
+    novel_main_page_html: str = get_novel_main_page(novel_main_page_url)
 
     # Metadata 추출하기
     metadata_dic: dict = extract_metadata(novel_main_page_html)
