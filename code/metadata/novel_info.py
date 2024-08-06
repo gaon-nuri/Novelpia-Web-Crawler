@@ -1,7 +1,7 @@
 from datetime import date  # date.today()
 from urllib.parse import urljoin, urlparse
 
-from myPackage.module import *
+from code.common.module import *
 
 
 def get_upload_date(novel_code: str, sort_method: str = "DOWN") -> str:
