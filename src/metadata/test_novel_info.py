@@ -3,16 +3,44 @@ import unittest
 from novel_info import *
 
 
-class TestGetUploadDate(unittest.TestCase):
-    def test_fst_upload_date(self):
-        self.assertEqual(get_upload_date("247416", "DOWN"), "2023-12-11")
+class TestGetFstUploadDate(unittest.TestCase):
+    def test_no_ep(self):
+        for num in range(50):
+            code = str(num)
+            with self.subTest(code=code):
+                self.assertIsNone(get_ep_up_date(code))
+        # code: str = "247416"  #
+        # fst_up_date: str = "2023-12-11"
+        # self.assertEqual(get_ep_up_date(code), fst_up_date)
 
-    def test_lst_upload_date(self):
-        self.assertEqual(get_upload_date("247416", "UP"), "2024-04-18")
+    def test_single_ep(self):
+        code: str = "124146"  # <연중용 나데나데 소설>
+        fst_up_date: str = "2023-12-13"
+        self.assertEqual(get_ep_up_date(code), fst_up_date)
+
+    def test_multiple_ep(self):
+        code: str = "247416"  # <숨겨진 흑막이 되었다>
+        fst_up_date: str = "2023-12-11"
+        self.assertEqual(get_ep_up_date(code), fst_up_date)
+
+
+class TestGetLstUploadDate(unittest.TestCase):
+    def test_no_ep(self):
+        self.assertEqual(get_ep_up_date("247416", "DOWN"), "2023-12-11")
+
+    def test_single_ep(self):
+        self.assertEqual(get_ep_up_date("247416", "DOWN"), "2023-12-11")
+
+    def test_multiple_ep(self):
+        self.assertEqual(get_ep_up_date("247416", "UP"), "2024-04-18")
 
 
 class TestConvertToMarkdown(unittest.TestCase):
     def test_convert_to_markdown(self):
+        """
+        소설의 Metadata 가 담긴 Dict 를 Markdown 형식의 문자열로 변환하는 테스트
+        :return: str
+        """
         info_dic: dict = {
             'title': '숨겨진 흑막이 되었다',
             'author': '미츄리',
