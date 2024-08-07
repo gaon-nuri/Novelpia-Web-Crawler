@@ -1,3 +1,4 @@
+import shutil
 import unittest
 
 from module import *
@@ -35,15 +36,17 @@ class TestGetEnvVar(unittest.TestCase):
 
 class TestAssurePathExists(unittest.TestCase):
 	def test_any_path(self):
-		test_path = Path("~/path/to/assure/file.ext")
+		test_path = Path("~/path/to/assure/file.ext").expanduser()
 		assure_path_exists(test_path)
+		parents = test_path.parents
 
 		try:  # 생성 성공 시 제거
-			for i, path in enumerate(test_path.parents):
-				if i == 3:
+			for i, path in enumerate(parents):
+				if path == Path(os.environ["HOME"]):
+					child = parents[i - 1]
+					shutil.rmtree(child)
+					print("[알림]", child, "폴더를 삭제했어요.")
 					break
-				path.rmdir()
-				# print("[알림]", path, "폴더를 삭제했어요.")
 
 		except FileNotFoundError:  # 생성 실패
 			raise
@@ -51,22 +54,23 @@ class TestAssurePathExists(unittest.TestCase):
 
 class TestGetNovelMainPage(unittest.TestCase):
 	def test_valid_novel_code(self):
-		code: str = "247416"
-		url: str = f"https://novelpia.com/novel/{code}"
+		# code: str = "247416"
+		for num in range(10):
+			code = str(num)
+			with self.subTest(code=code):
+				url: str = f"https://novelpia.com/novel/{code}"
+				try:
+					html: str = get_novel_main_page(url)
 
-		with self.subTest(url=url):
-			try:
-				html: str = get_novel_main_page(url)
+				# 접속 실패
+				except requests.exceptions.ConnectionError as ce:
+					err_msg: str = ce.args[0].args[0]
+					index: int = err_msg.find("Failed")
+					print_with_new_line(err_msg[index:-42])
 
-			# 접속 실패
-			except requests.exceptions.ConnectionError as ce:
-				err_msg: str = ce.args[0].args[0]
-				index: int = err_msg.find("Failed")
-				print_with_new_line(err_msg[index:-42])
-
-			# 성공
-			else:
-				self.assertNotEqual(html, "")
+				# 성공
+				else:
+					self.assertNotEqual(html, "")
 
 
 class Test(unittest.TestCase):
