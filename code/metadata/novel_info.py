@@ -25,7 +25,7 @@ def get_upload_date(novel_code: str, sort_method: str = "DOWN") -> str:
         upload_date = str(date.today())  # 2024-07-25
     else:
         upload_date = "20" + upload_date  # 21.01.18 > 2021.01.18
-        upload_date = "-".join(upload_date.split("."))  # 2021.01.18 > 2021-01-18
+        upload_date = upload_date.replace(".", "-")  # 2021.01.18 > 2021-01-18
 
     return upload_date
 
