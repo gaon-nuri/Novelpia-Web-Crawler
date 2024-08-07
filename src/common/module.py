@@ -240,6 +240,11 @@ def has_prologue(novel_code: str) -> bool:
 	"""
 	fst_page_ep_list_html: str = get_ep_list(novel_code, sort="DOWN", page=1)
 	fst_ep_list_soup = BeautifulSoup(fst_page_ep_list_html, "html.parser")
+
+	# 작성된 회차 無
+	if fst_ep_list_soup.table is None:
+		return False
+
 	fst_page_ep_list = fst_ep_list_soup.select("tr.ep_style5 td.font12")
 	fst_ep_info: list[str] = fst_page_ep_list[0].text.split()  # ['무료', '프롤로그', 'EP.0', '0', '0', '0', '24.03.03']
 
