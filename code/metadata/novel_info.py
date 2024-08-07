@@ -278,8 +278,7 @@ def main() -> None:
     # Markdown 파일 새로 쓰기
     with (open(novel_markdown_name, "w") as novelMarkDownFile):
         novelMarkDownFile.write(novel_markdown_content)
-        print()
-        print(novel_markdown_name, "작성함.")
+        print_with_new_line(novel_markdown_name, "작성함.")
 
 
 if __name__ == "__main__":
