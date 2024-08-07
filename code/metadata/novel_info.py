@@ -123,7 +123,7 @@ def extract_metadata(main_page_html: str) -> dict:
         # 작가명 추출
         info_dic["author"]: str = soup.select_one("a.writer-name").string.strip()  # '제울'
 
-        print_with_line(f"[알림] {info_dic['author']} 작가의 <{info_dic['title']}>은 정상적으로 서비스 중인 소설이에요.")
+        print_with_new_line(f"[알림] {info_dic['author']} 작가의 <{info_dic['title']}>은 정상적으로 서비스 중인 소설이에요.")
 
         # 연재 유형(자유/PLUS), 청불/독점작/챌린지/연중(및 지연)/완결 여부
         badge_list: list[str] = [badge.text for badge in soup.select(".in-badge span")]
