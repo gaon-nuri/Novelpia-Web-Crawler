@@ -211,7 +211,7 @@ def convert_to_markdown(info_dic: dict) -> str:
     """
 
     # 연재 지연/중단의 경우 '연중(각)'으로 표시
-    on_hiatus: bool = (info_dic["badge_dic"]["연재지연"] != info_dic["badge_dic"]["연재중단"])
+    on_hiatus: bool = info_dic["badge_dic"]["연재지연"] or info_dic["badge_dic"]["연재중단"]
 
     # 최종 Markdown
     novel_markdown_content: str = f"""---
