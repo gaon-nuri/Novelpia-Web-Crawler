@@ -5,6 +5,13 @@ from src.common.module import *
 
 
 def extract_alert_msg(soup, title: str) -> str:
+    """
+    소설 메인 페이지에서 알림 창의 오류 메시지를 추출하는 함수
+
+    :param soup: BeautifulSoup 객체
+    :param title: 소설 제목
+    :return: 오류 메시지
+    """
     try:
         msg_tag = soup.select_one("#alert_modal .mg-b-5")
 
