@@ -4,20 +4,55 @@ from urllib.parse import urljoin, urlparse
 from src.common.module import *
 
 
-def get_upload_date(novel_code: str, sort_method: str = "DOWN") -> str:
+def extract_alert_msg(soup, title: str) -> str:
+    try:
+        msg_tag = soup.select_one("#alert_modal .mg-b-5")
+
+    # 알림 창이 나오지 않음
+    except AttributeError as ae:
+        print(f"예외 발생: {ae = }")
+
+    # 알림 메시지 추출
+    else:
+        msg: str = msg_tag.text
+        """
+        0: 잘못된 소설 번호 입니다. (제목, 줄거리 無)
+        2: 삭제된 소설 입니다. (제목 有, 줄거리 無)
+        200000: 잘못된 접근입니다. (제목 有, 줄거리 無)
+        """
+        if msg == "잘못된 소설 번호 입니다.":
+            pass
+        elif msg == "잘못된 접근입니다.":
+            msg = f"<{title}> 에 대한 {msg}"
+        elif msg == "삭제된 소설 입니다.":
+            msg = f"<{title}> 은(는) {msg}"
+
+        return msg
+
+
+def get_ep_up_date(novel_code: str, sort_method: str = "DOWN") -> str | None:
     """
     소설의 회차 목록에서 첫/마지막 회차 게시일을 추출하여 반환하는 함수
 
     :param novel_code: 소설 번호
     :param sort_method: "DOWN", 첫화부터 / "UP", 최신화부터
-    :return: 첫/마지막 회차 게시일
+    :return: 첫/마지막 회차 게시일. 작성된 회차가 없으면 None
     """
     ep_list_html = get_ep_list(novel_code, sort_method, 1)
     ep_list_soup = BeautifulSoup(ep_list_html, "html.parser")
 
-    # 회차 게시일 추출
+    # 회차 목록 표 추출
+    ep_list_table = ep_list_soup.table
+
+    # 작성된 회차 無
+    if ep_list_table is None:
+        return None
+
+    # 작성된 회차 有
+    ep_list = ep_list_table.select_one("tr.ep_style5")
+
     # ['무료', '프롤로그', 'EP.0', '0', '0', '2', '21.01.18']
-    ep_info: list[str] = ep_list_soup.select_one("tr.ep_style5").text.split()
+    ep_info: list[str] = ep_list.text.split()
     upload_date: str = ep_info[-1]  # 21.01.18 또는 '19시간전'
 
     # 24시간 이내에 게시된 경우 당일 날짜로 간주
@@ -88,42 +123,22 @@ def extract_metadata(main_page_html: str) -> dict:
 
     # 서비스 상태 비정상, 소설 정보를 받지 못함
     except AttributeError as ae:
-        print_with_new_line(f"[오류] 예외 발생: {ae = }")
+        print_under_new_line(f"[오류] 예외 발생: {ae = }")
 
         # 알림 창 추출
-        try:
-            msg_tag = soup.select_one("#alert_modal .mg-b-5")
+        alert_msg: str = extract_alert_msg(soup, title)
 
-        # 알림 창이 나오지 않음
-        except AttributeError as ae:
-            print(f"예외 발생: {ae = }")
-
-        # 알림 메시지 추출
-        else:
-            msg: str = msg_tag.text
-            """
-            0: 잘못된 소설 번호 입니다. (제목, 줄거리 無)
-            4: 삭제된 소설 입니다. (제목 有, 줄거리 無)
-            200000: 잘못된 접근입니다. (제목 有, 줄거리 無)
-            """
-            if msg == "잘못된 소설 번호 입니다.":
-                pass
-            elif msg == "잘못된 접근입니다.":
-                msg = f"<{title}> 에 대한 {msg}"
-            elif msg == "삭제된 소설 입니다.":
-                msg = f"<{title}> 은(는) {msg}"
-
-            # 오류 메시지 출력 후 종료
-            print()
-            exit_code = f"[노벨피아] {msg}"
-            exit(exit_code)
+        # 오류 메시지 출력 후 종료
+        print()
+        exit_code = f"[노벨피아] {alert_msg}"
+        exit(exit_code)
 
     # 서비스 상태 정상, 계속 진행
     else:
         # 작가명 추출
         info_dic["author"]: str = soup.select_one("a.writer-name").string.strip()  # '제울'
 
-        print_with_new_line(f"[알림] {info_dic['author']} 작가의 <{info_dic['title']}>은 정상적으로 서비스 중인 소설이에요.")
+        print_under_new_line(f"[알림] {info_dic['author']} 작가의 <{info_dic['title']}>은 정상적으로 서비스 중인 소설이에요.")
 
         # 연재 유형(자유/PLUS), 청불/독점작/챌린지/연중(및 지연)/완결 여부
         badge_list: list[str] = [badge.text for badge in soup.select(".in-badge span")]
@@ -172,8 +187,8 @@ def extract_metadata(main_page_html: str) -> dict:
 
         # 작성된 회차 有, 공개 일자 추출
         if info_dic["user_stat_dic"]["ep"] != 0:
-            info_dic["fstUploadDate"] = get_upload_date(novel_code, "DOWN")
-            info_dic["lstUploadDate"] = get_upload_date(novel_code, "UP")
+            info_dic["fstUploadDate"] = get_ep_up_date(novel_code, "DOWN")
+            info_dic["lstUploadDate"] = get_ep_up_date(novel_code, "UP")
 
     return info_dic
 
@@ -256,7 +271,7 @@ def main() -> None:
     # 환경 변수 無, 기본 값으로
     except KeyError as ke:
         novel_markdown_dir = novel_dir / "markdown"
-        print_with_new_line(f"`예외 발생: {ke = }")
+        print_under_new_line(f"`예외 발생: {ke = }")
         print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요. Markdown 파일은 {novel_markdown_dir} 에 쓸게요.")
 
     novel_code: str = str(ask_for_number("소설 번호"))
@@ -279,7 +294,7 @@ def main() -> None:
     # Markdown 파일 새로 쓰기
     with (open(novel_markdown_name, "w") as novelMarkDownFile):
         novelMarkDownFile.write(novel_markdown_content)
-        print_with_new_line(novel_markdown_name, "작성함.")
+        print_under_new_line(novel_markdown_name, "작성함.")
 
 
 if __name__ == "__main__":
