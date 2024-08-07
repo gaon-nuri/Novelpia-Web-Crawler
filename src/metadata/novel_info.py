@@ -1,7 +1,7 @@
-0from datetime import date  # date.today()
+from datetime import date  # date.today()
 from urllib.parse import urljoin, urlparse
 
-from code.common.module import *
+from src.common.module import *
 
 
 def get_upload_date(novel_code: str, sort_method: str = "DOWN") -> str:
@@ -32,7 +32,7 @@ def get_upload_date(novel_code: str, sort_method: str = "DOWN") -> str:
 
 def extract_metadata(main_page_html: str) -> dict:
     """
-    소설 Main Weppage HTML 문자열을 입력받아 Metadata 를 반환하는 함수
+    소설 Main Webpage HTML 문자열을 입력받아 Metadata 를 반환하는 함수
 
     :param main_page_html: 소설 Metadata 를 추출할 HTML
     :return: 추출한 Metadata 가 담긴 Dict
@@ -170,9 +170,10 @@ def extract_metadata(main_page_html: str) -> dict:
         # 줄거리 추출
         info_dic["synopsis"]: str = soup.select_one(".synopsis").text
 
-        # 공개 일자 추출
-        info_dic["fstUploadDate"] = get_upload_date(novel_code, "DOWN")
-        info_dic["lstUploadDate"] = get_upload_date(novel_code, "UP")
+        # 작성된 회차 有, 공개 일자 추출
+        if info_dic["user_stat_dic"]["ep"] != 0:
+            info_dic["fstUploadDate"] = get_upload_date(novel_code, "DOWN")
+            info_dic["lstUploadDate"] = get_upload_date(novel_code, "UP")
 
     return info_dic
 
