@@ -3,13 +3,15 @@
 # 개요
 노벨피아 소설의 번호를 입력받아 소설 메인 페이지에서 Metadata 를 크롤링한 뒤 Obsidian용 Markdown 파일로 출력합니다.
 
-# 특징
+# 기능
+- 제목, 작가명, 태그 등을 크롤링. 전체 목록 아래에.
+- Obsidian에 최적화된 문법의 Markdown 파일을 출력.
+
+# 구현
 - Python 100%. requests, BeautifulSoup 사용.
 - HTTP Client 방식 (Headless Browser 방식 X)
-- 제목, 작가명, 태그 등을 크롤링. 전체 목록 아래에.
 - 노벨피아 공식 API만 호출함. 비공식 API 사용 X.
-- 반자동. 소설 번호와 별칭 유무를 수동으로 입력받음.
-- Obsidian에 최적화된 문법의 Markdown 파일을 출력.
+- 단위 테스트 지원 (연중작 비율 측정 등에 응용 가능)
 
 # 크롤링하는 정보의 목록
 - 제목
