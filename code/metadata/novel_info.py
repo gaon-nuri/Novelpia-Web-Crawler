@@ -1,4 +1,4 @@
-from datetime import date  # date.today()
+0from datetime import date  # date.today()
 from urllib.parse import urljoin, urlparse
 
 from code.common.module import *
@@ -157,7 +157,7 @@ def extract_metadata(main_page_html: str) -> dict:
 
         # 회차, 알람, 선호수 추출
         user_stat_li: list[str] = [i.string.replace(",", "") for i in soup.select("span.writer-name")]
-        user_stat_li[2] = user_stat_li[2].replace("회차", "")  # 2538회차 > 2538
+        user_stat_li[2] = user_stat_li[2].removesuffix("회차")  # 2538회차 > 2538
         user_stat_li_int: list[int] = [int(user_stat) for user_stat in user_stat_li][::-1]
 
         info_dic["user_stat_dic"] = dict(zip(info_dic["user_stat_dic"].keys(), user_stat_li_int))
