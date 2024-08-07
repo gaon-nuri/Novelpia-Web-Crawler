@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
 
 
-def print_with_new_line(*msg: object) -> None:
+def print_under_new_line(*msg: object) -> None:
 	print()
 	print(*msg)
 
@@ -27,7 +27,7 @@ def get_env_var(key: str) -> str | None:
 
 	# 환경 변수 無, 빈 문자열 반환
 	except KeyError as ke:
-		print_with_new_line(f"예외 발생: {ke = }")
+		print_under_new_line(f"예외 발생: {ke = }")
 		print(f"환경 변수 '{key}' 을 찾지 못했어요.")
 		return None
 
@@ -90,7 +90,7 @@ def ask_for_string(prompt: str = "입력", type: type = str) -> str:
 
 		# 해당 형식으로 변환할 수 없는 문자열
 		except ValueError as ve:
-			print(f"예외 발생: {ve = }")
+			print_under_new_line(f"예외 발생: {ve = }")
 			return False
 
 	# 유효한 형식의 문자열을 입력받을 때까지 반복
@@ -101,12 +101,12 @@ def ask_for_string(prompt: str = "입력", type: type = str) -> str:
 
 		# 빈 문자열
 		if len(answer_str) == 0:
-			print("[오류] 입력을 받지 못했어요. 이전 단계로 돌아갈게요.")
+			print_under_new_line("[오류] 입력을 받지 못했어요. 이전 단계로 돌아갈게요.")
 			continue
 
 		# 무효한 문자열
 		if not is_valid_string:
-			print_with_new_line("[오류] 잘못된 입력이에요. 이전 단계로 돌아갈게요.")
+			print_under_new_line("[오류] 잘못된 입력이에요. 이전 단계로 돌아갈게요.")
 			continue
 		return answer_str
 
@@ -127,7 +127,7 @@ def ask_for_permission(question: str, condition: bool = True) -> (bool, bool):
 		elif user_answer == "N":
 			return True, False  # 질문 함, 동의 안 함
 		else:
-			print("[동의] 동의하면 Y나 y, 그러지 않으면 N이나 n을 눌러 주세요.")
+			print_under_new_line("[동의] 동의하면 Y나 y, 그러지 않으면 N이나 n을 눌러 주세요.")
 
 
 def assure_path_exists(path_to_assure: Path) -> None:
@@ -189,7 +189,7 @@ def open_file_if_none(file_name: Path) -> None:
 
 		# 덮어쓸 경우
 		if can_overwrite_file:
-			print_with_new_line("[알림]", file_name, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
+			print_under_new_line("[알림]", file_name, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
 			print()
 
 		# 기존 파일을 유지, 덮어쓰지 않고 종료
@@ -198,7 +198,7 @@ def open_file_if_none(file_name: Path) -> None:
 
 	# 기존 파일 無, 새로 내려받기
 	else:
-		print_with_new_line("[알림]", file_name, "에 새로 만들었어요.")
+		print_under_new_line("[알림]", file_name, "에 새로 만들었어요.")
 
 
 def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, use_login_key: bool = False) -> str:
