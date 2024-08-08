@@ -95,8 +95,8 @@ tags:
         self.assertEqual(convert_to_markdown(info_dic), formatted_md)
 
 
-class Test(unittest.TestCase):
-    def test_extract_metadata(self):
+class TestExtractNovelInfo(unittest.TestCase):
+    def test_extract_novel_info(self):
         self.fail()
 
 
