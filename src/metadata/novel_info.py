@@ -72,7 +72,7 @@ def get_ep_up_date(novel_code: str, sort_method: str = "DOWN") -> str | None:
     return upload_date
 
 
-def extract_metadata(main_page_html: str) -> dict:
+def extract_novel_info(main_page_html: str) -> dict:
     """
     소설 Main Webpage HTML 문자열을 입력받아 Metadata 를 반환하는 함수
 
@@ -287,13 +287,13 @@ def main() -> None:
     novel_main_page_html: str = get_novel_main_page(novel_main_page_url)
 
     # Metadata 추출하기
-    metadata_dic: dict = extract_metadata(novel_main_page_html)
+    info_dic: dict = extract_novel_info(novel_main_page_html)
 
     # ../novel/markdown/제목.md
-    novel_markdown_name: Path = (novel_markdown_dir / metadata_dic['title']).with_suffix(".md")
+    novel_markdown_name: Path = (novel_markdown_dir / info_dic['title']).with_suffix(".md")
 
     # Markdown 형식으로 변환하기
-    novel_markdown_content = convert_to_markdown(metadata_dic)
+    novel_markdown_content = convert_to_markdown(info_dic)
 
     # Markdown 폴더 확보하기
     assure_path_exists(novel_markdown_name)
