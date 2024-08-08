@@ -72,6 +72,42 @@ class TestGetNovelMainPage(unittest.TestCase):
                 else:
                     self.assertNotEqual(html, "")
 
+    def test_extract_novel_status(self):
+        from src.metadata.novel_info import extract_novel_info
+
+        def func(novel_code: str):
+            url: str = f"https://novelpia.com/novel/{novel_code}"
+            try:
+                html: str = get_novel_main_page(url)
+
+            # 접속 실패
+            except requests.exceptions.ConnectionError as ce:
+                err_msg: str = ce.args[0].args[0]
+                index: int = err_msg.find("Failed")
+                print_under_new_line(err_msg[index:-42])
+
+            # 성공
+            else:
+                info_dic: dict = extract_novel_info(html)
+                on_hiatus: bool = info_dic["badge_dic"]["연재지연"] or info_dic["badge_dic"]["연재중단"]
+                return on_hiatus
+
+        # code_on_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
+        # code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
+        # code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
+        #
+        # on_hiatus: bool = func(self, code_on_hiatus)
+        # completed: bool = func(self, code_completed)
+        # ongoing: bool = func(self, code_ongoing)
+        #
+        # self.assertTrue(on_hiatus and not completed or ongoing)
+
+        for num in range(296183):  # 노벨피아 소설 수 (24.8.8 11.52 기준)
+            code = str(num)
+            with self.subTest(code=code):
+                is_on_hiatus: bool = func(code)
+                self.assertTrue(is_on_hiatus)
+
 
 class TestGetEpListAndInfo(unittest.TestCase):
     def test_invalid_novel_code(self):
@@ -116,7 +152,8 @@ class TestGetEpListAndInfo(unittest.TestCase):
 
         # self.assertTupleEqual(ep_info, (None,) * 3)
 
-        for num in range(296079):  # 노벨피아 소설 수 (24.8.7 22.32 기준)
+        # 삭제된 작품 비율 측정
+        for num in range(296179):  # 노벨피아 소설 수 (24.8.8 11.13 기준)
             code = str(num)
             with self.subTest(code=code, ep_no=ep_no):
                 html: str = get_ep_list(code)
