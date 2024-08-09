@@ -44,7 +44,7 @@ class CntNoEpNovel(unittest.TestCase):
         노벨피아 소설 중 작성된 회차가 없는 작품을 세는 테스트
         :return: 회차가 없으면 성공, 있으면 실패
         """
-        for num in range(total_novel_cnt):
+        for num in range(1, total_novel_cnt):
             code = str(num)
             with self.subTest(code=code):
                 self.assertIsNone(get_ep_up_date(code))
@@ -110,46 +110,60 @@ tags:
         self.assertEqual(convert_to_markdown(info_dic), formatted_md)
 
 
-def chk_up_status(novel_code: str) -> str:
-    """
-    소설의 연재 상태를 추출하여 반환하는 함수
-
-    :param novel_code: 소설 번호
-    :return: '완결', '연재중단', '연재지연', '연재중' 중 택 1
-    """
-    url: str = f"https://novelpia.com/novel/{novel_code}"
-    html: str = get_novel_main_page(url)
-
-    info_dic: dict = extract_novel_info(html)
-    flag_dic: dict = info_dic["badge_dic"]
-    
-    for key in ["완결", "연재지연", "연재중단"]:
-        if flag_dic[key]:
-            return key
-    
-    return "연재중"
-
-
 class GetNovelStatus(unittest.TestCase):
+    """
+    노벨피아의 연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트.
+    """
+    @staticmethod
+    def chk_up_status(novel_code: str) -> str:
+        """
+        소설의 연재 상태를 추출하여 반환하는 함수
+
+        :param novel_code: 소설 번호
+        :return: '완결', '연재중단', '연재지연', '연재중' 중 택 1
+        """
+        url: str = f"https://novelpia.com/novel/{novel_code}"
+        html: str = get_novel_main_page(url)
+
+        info_dic: dict = extract_novel_info(html)
+        flag_dic: dict = info_dic["badge_dic"]
+
+        for key in ["완결", "연재지연", "연재중단"]:
+            if flag_dic[key]:
+                return key
+
+        return "연재중"
+
     def test_get_novel_status(self):
         code_on_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
 
-        on_hiatus: bool = (chk_up_status(code_on_hiatus) == "연재중단")
-        completed: bool = (chk_up_status(code_completed) == "완결")
-        ongoing: bool = (chk_up_status(code_ongoing) == "연재중")
+        on_hiatus: bool = (self.chk_up_status(code_on_hiatus) == "연재중단")
+        completed: bool = (self.chk_up_status(code_completed) == "완결")
+        ongoing: bool = (self.chk_up_status(code_ongoing) == "연재중")
 
         self.assertTrue(on_hiatus and not completed or ongoing)
 
 
-class CntNovelOnHiatus(unittest.TestCase):
+class CntNovelInStatus(GetNovelStatus):
+    """
+    노벨피아의 소설 중 특정 연재 상태의 소설 비율을 재는 테스트
+    """
+    @staticmethod
+    def chk_up_status(novel_code: str):
+        return GetNovelStatus.chk_up_status(novel_code)
+
     def test_cnt_novel_on_hiatus(self):
-        for num in range(total_novel_cnt):
+        """
+        연중작 비율을 재는 테스트
+        """
+        for num in range(1, total_novel_cnt):
             code = str(num)
             with self.subTest(code=code):
-                up_status: str = chk_up_status(code)
+                up_status: str = self.chk_up_status(code)
                 is_on_hiatus: bool = (up_status == "연재지연") or (up_status == "연재중단")
+
                 self.assertTrue(is_on_hiatus)
 
 
