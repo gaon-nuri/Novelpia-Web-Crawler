@@ -51,16 +51,16 @@ def add_login_key(headers: dict[str: str]) -> (str, dict):
 	return login_key, headers
 
 
-def ask_for_number(number_type: str) -> int:
+def ask_for_num(num_type: str) -> int:
 	"""
 	유효한 번호를 얻을 때까지 입력을 받는 함수
 
-	:param number_type:
+	:param num_type:
 	:return: 번호 (자연수)
 	"""
 	while True:
-		number_string: str = str(int(ask_for_string("[입력] " + number_type, int)))  # 01, 001,... > 1
-		is_valid_num: bool = ask_for_permission(f"[확인] {number_type}가 {number_string}인가요?")[1]
+		number_string: str = str(int(ask_for_str("[입력] " + num_type, int)))  # 01, 001,... > 1
+		is_valid_num: bool = ask_for_permission(f"[확인] {num_type}가 {number_string}인가요?")[1]
 		number = int(number_string)
 
 		# 유효한 소설 번호 (자연수)
@@ -68,23 +68,21 @@ def ask_for_number(number_type: str) -> int:
 			return number
 
 
-def ask_for_string(prompt: str = "입력", type: type = str) -> str:
+def chk_str_type(in_str: str, check_type: type = str) -> bool:
 	"""
-	문자열을 입력받고, 그 형식이 유효하면 반환하는 함수
+	문자열의 형식을 검사하는 함수
 
-	:param prompt: 문자열을 입력하라는 메시지
-	:param type: 입력받을 문자열이 뜻하는 타입
-	:return: 유효한 입력 문자열
+	:param in_str: 형식을 검사할 문자열
+	:param check_type: 문자열에 기대하는 형식
+	:return: 형식이 올바르면 참, 그렇지 않으면 거짓
 	"""
+	check_str = in_str.strip()
 
-	def check_string_validity(check_str: str, check_type: type = str) -> bool:
-		"""
-		문자열의 형식을 검사하는 함수
-
-		:param check_str: 형식을 검사할 문자열
-		:param check_type: 문자열에 기대하는 형식
-		:return: 형식이 올바르면 참, 그렇지 않으면 거짓
-		"""
+	if check_type == str:
+		return check_str.isascii()
+	elif check_type == int:
+		return check_str.isnumeric()
+	else:
 		try:
 			return isinstance(check_type(check_str), check_type)
 
@@ -93,11 +91,21 @@ def ask_for_string(prompt: str = "입력", type: type = str) -> str:
 			print_under_new_line(f"예외 발생: {ve = }")
 			return False
 
+
+def ask_for_str(prompt: str = "입력", type: type = str) -> str:
+	"""
+	문자열을 입력받고, 그 형식이 유효하면 반환하는 함수
+
+	:param prompt: 문자열을 입력하라는 메시지
+	:param type: 입력받을 문자열이 뜻하는 타입
+	:return: 유효한 입력 문자열
+	"""
+
 	# 유효한 형식의 문자열을 입력받을 때까지 반복
 	while True:
 		print()
 		answer_str: str = input(f"{prompt}: ").strip()
-		is_valid_string = check_string_validity(answer_str, type)
+		is_valid_string = chk_str_type(answer_str, type)
 
 		# 빈 문자열
 		if len(answer_str) == 0:
@@ -121,7 +129,7 @@ def ask_for_permission(question: str, condition: bool = True) -> (bool, bool):
 	"""
 	while condition:
 		# 질문을 하고 답변을 Y, y, N, n 중 하나로 받음
-		user_answer: str = ask_for_string(f"{question} (Y/n)").strip().capitalize()
+		user_answer: str = ask_for_str(f"{question} (Y/n)").strip().capitalize()
 		if user_answer == "Y":
 			return True, True  # 질문 함, 동의 함
 		elif user_answer == "N":
@@ -155,22 +163,31 @@ def assure_path_exists(path_to_assure: Path) -> None:
 			break
 
 
-def get_novel_main_page(url: str) -> str:
+def get_novel_main_page(url: str) -> str | None:
 	"""
-	서버에 소설의 메인 페이지 를 요청하고, 성공 시 HTML 응답을 반환하는 함수
+	서버에 소설의 메인 페이지를 요청하고, HTML 응답을 반환하는 함수
 
-	:param url: 소설 메인 페이지 URL
-	:return: 소설 메인 페이지 HTML
+	:param url: 요청 URL
+	:return: HTML 응답, 접속 실패 시 None
 	"""
 	headers: dict = {'User-Agent': ua}
 
-	# 소설 메인 페이지의 HTML 문서를 요청
-	response = requests.get(url=url, headers=headers)  # response: <Response [200]>
-	html: str = response.text
+	try:
+		# 소설 메인 페이지의 HTML 문서를 요청
+		response = requests.get(url=url, headers=headers)  # response: <Response [200]>
 
-	assert html != "", "노벨피아 서버 터짐"
+	# 접속 실패
+	except requests.exceptions.ConnectionError as ce:
+		err_msg: str = ce.args[0].args[0]
+		index: int = err_msg.find("Failed")
+		print_under_new_line(err_msg[index:-42])
+		return None
 
-	return html
+	# 성공
+	else:
+		html: str = response.text
+		assert html != ""
+		return html
 
 
 def open_file_if_none(file_name: Path) -> None:
