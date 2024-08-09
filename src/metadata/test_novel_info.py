@@ -136,9 +136,9 @@ class GetNovelStatus(unittest.TestCase):
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
 
-        on_hiatus: bool = chk_up_status(code_on_hiatus)
-        completed: bool = chk_up_status(code_completed)
-        ongoing: bool = chk_up_status(code_ongoing)
+        on_hiatus: bool = (chk_up_status(code_on_hiatus) == "연재중단")
+        completed: bool = (chk_up_status(code_completed) == "완결")
+        ongoing: bool = (chk_up_status(code_ongoing) == "연재중")
 
         self.assertTrue(on_hiatus and not completed or ongoing)
 
@@ -149,7 +149,7 @@ class CntNovelOnHiatus(unittest.TestCase):
             code = str(num)
             with self.subTest(code=code):
                 up_status: str = chk_up_status(code)
-                is_on_hiatus: bool = chk_up_status(code) == "연재지연" or "연재중단"
+                is_on_hiatus: bool = (up_status == "연재지연") or (up_status == "연재중단")
                 self.assertTrue(is_on_hiatus)
 
 
