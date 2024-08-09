@@ -35,6 +35,15 @@ class TestGetEnvVar(unittest.TestCase):
         os.environ.pop("test_key")
 
 
+class AddLoginKey(unittest.TestCase):
+    def test_add_login_key(self):
+        header: dict[str: str] = {"User-Agent": ua}
+        new_header: dict[str: str] = add_login_key(header)
+        login_key: str = new_header["LOGINKEY"].split("=")[1]
+
+        self.assertEqual(login_key, get_env_var("LOGINKEY"))
+
+
 class TestChkStrType(unittest.TestCase):
     def test_str_is_num(self):
         num: str = "1"
@@ -67,7 +76,7 @@ class TestAssurePathExists(unittest.TestCase):
             raise
 
 
-class TestGetNovelMainPage(unittest.TestCase):
+class GetNovelMainPage(unittest.TestCase):
     def test_valid_novel_code(self):
         # code: str = "247416"
         for num in range(10):
@@ -79,22 +88,25 @@ class TestGetNovelMainPage(unittest.TestCase):
                 self.assertIsNotNone(html)
 
 
-class TestGetEpListAndInfo(unittest.TestCase):
-    def test_invalid_novel_code(self):
-        from src.viewer.viewer import extract_ep_info
+class GetEpListAndInfo(unittest.TestCase):
+    from src.viewer.viewer import extract_ep_info
 
+    @staticmethod
+    def get_ep_info(html, ep_no, login):
+        return GetEpListAndInfo.extract_ep_info(html, ep_no, login)
+
+    def test_invalid_novel_code(self):
         code: str = "0"
         ep_no: int = 16
         answer_title: str = "계월향의 꿈"
 
         html: str = get_ep_list(code)
-        ep_info: str = extract_ep_info(html, ep_no, False)
+        ep_info: str = self.get_ep_info(html, ep_no, False)
         ep_title = ep_info[0]
 
         self.assertEqual(ep_title, answer_title)
 
     def test_novel_on_service(self):
-        from src.viewer.viewer import extract_ep_info
 
         test_set: set[tuple[str, str, int, str]] = {
             ("610", "DOWN", 1, "001. 능력 각성"),
@@ -106,42 +118,34 @@ class TestGetEpListAndInfo(unittest.TestCase):
 
             with self.subTest(code=code, sort=sort, ep_no=ep_no, title_a=title_a):
                 html: str = get_ep_list(code, sort)
-                ep_info: str = extract_ep_info(html, ep_no, False)
+                ep_info: str = self.get_ep_info(html, ep_no, False)
                 title_q = ep_info[0]
 
                 self.assertEqual(title_q, title_a)
 
     def test_deleted_novel(self):
-        from src.viewer.viewer import extract_ep_info
 
-        # code: str = "2"
-        ep_no: int = 1
+        code: str = "2"
+        html: str = get_ep_list(code)
+        ep_info: tuple = self.get_ep_info(html, 1, False)
 
-        # html: str = get_ep_list(code)
-        # ep_info: tuple = extract_ep_info(html, ep_no, False)
+        self.assertTupleEqual(ep_info, (None,) * 3)
 
-        # self.assertTupleEqual(ep_info, (None,) * 3)
 
-        # 삭제된 작품 비율 측정
-        for num in range(total_novel_cnt):
+class CntDeletedNovel(GetEpListAndInfo):
+    """
+    노벨피아 소설 중 삭제된 작품의 비율을 측정하는 테스트
+    """
+    def test_cnt_deleted_novel(self):
+        for num in range(1, total_novel_cnt):
             code = str(num)
-            with self.subTest(code=code, ep_no=ep_no):
+            with self.subTest(code=code):
                 html: str = get_ep_list(code)
-                ep_info: tuple = extract_ep_info(html, ep_no, False)
+                ep_info: tuple = self.get_ep_info(html, 1, False)
 
                 self.assertTupleEqual(ep_info, (None,) * 3)
 
 
-class Test(unittest.TestCase):
-    def test_add_login_key(self):
-        # header: dict[str: str] = {"User-Agent": ua}
-        # header_with_login_key = {"User-Agent": ua, "Cookie": "LOGINKEY="}
-        # self.assertEqual()
-        self.fail()
-
-    def test_open_file_if_none(self):
-        self.fail()
-
-
 if __name__ == '__main__':
+    unittest.TestCase.longMessage = False
     unittest.main()
