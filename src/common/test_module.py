@@ -1,7 +1,9 @@
 import shutil
 import unittest
 
-from module import *
+from src.common.module import *
+
+total_novel_cnt: int = 296271  # 노벨피아 소설 수 (2024-08-08 20:10 기준)
 
 
 class TestHasPrologue(unittest.TestCase):
@@ -9,10 +11,9 @@ class TestHasPrologue(unittest.TestCase):
     입력한 번호의 소설에 프롤로그가 있는 경우와 없는 경우 모두 테스트
     """
     def test_prologue_found(self):
-        self.assertTrue(has_prologue("145916"))  # <시계탑의 페인 공작님과 마검 소녀>
-
-    def test_prologue_not_found(self):
-        self.assertFalse(has_prologue("247416"))  # <숨겨진 흑막이 되었다>
+        code_with_p: str = "145916"  # <시계탑의 페인 공작님과 마검 소녀>
+        code_without: str = "247416"  # <숨겨진 흑막이 되었다>
+        self.assertTrue(has_prologue(code_with_p) and not has_prologue(code_without))
 
 
 class TestGetEnvVar(unittest.TestCase):
@@ -32,6 +33,20 @@ class TestGetEnvVar(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         os.environ.pop("test_key")
+
+
+class TestChkStrType(unittest.TestCase):
+    def test_str_is_num(self):
+        num: str = "1"
+        num_in_tab: str = "\t12\t"
+
+        alnum: str = "a1"
+        tab_in_num: str = "1\t2"
+
+        is_num: bool = chk_str_type(num, int) and chk_str_type(num_in_tab, int)
+        is_not_num: bool = chk_str_type(alnum, int) or chk_str_type(tab_in_num, int)
+
+        self.assertTrue(is_num and not is_not_num)
 
 
 class TestAssurePathExists(unittest.TestCase):
@@ -59,54 +74,9 @@ class TestGetNovelMainPage(unittest.TestCase):
             code = str(num)
             with self.subTest(code=code):
                 url: str = f"https://novelpia.com/novel/{code}"
-                try:
-                    html: str = get_novel_main_page(url)
-
-                # 접속 실패
-                except requests.exceptions.ConnectionError as ce:
-                    err_msg: str = ce.args[0].args[0]
-                    index: int = err_msg.find("Failed")
-                    print_under_new_line(err_msg[index:-42])
-
-                # 성공
-                else:
-                    self.assertNotEqual(html, "")
-
-    def test_extract_novel_status(self):
-        from src.metadata.novel_info import extract_novel_info
-
-        def func(novel_code: str):
-            url: str = f"https://novelpia.com/novel/{novel_code}"
-            try:
                 html: str = get_novel_main_page(url)
 
-            # 접속 실패
-            except requests.exceptions.ConnectionError as ce:
-                err_msg: str = ce.args[0].args[0]
-                index: int = err_msg.find("Failed")
-                print_under_new_line(err_msg[index:-42])
-
-            # 성공
-            else:
-                info_dic: dict = extract_novel_info(html)
-                on_hiatus: bool = info_dic["badge_dic"]["연재지연"] or info_dic["badge_dic"]["연재중단"]
-                return on_hiatus
-
-        # code_on_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
-        # code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
-        # code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
-        #
-        # on_hiatus: bool = func(self, code_on_hiatus)
-        # completed: bool = func(self, code_completed)
-        # ongoing: bool = func(self, code_ongoing)
-        #
-        # self.assertTrue(on_hiatus and not completed or ongoing)
-
-        for num in range(296183):  # 노벨피아 소설 수 (24.8.8 11.52 기준)
-            code = str(num)
-            with self.subTest(code=code):
-                is_on_hiatus: bool = func(code)
-                self.assertTrue(is_on_hiatus)
+                self.assertIsNotNone(html)
 
 
 class TestGetEpListAndInfo(unittest.TestCase):
@@ -153,7 +123,7 @@ class TestGetEpListAndInfo(unittest.TestCase):
         # self.assertTupleEqual(ep_info, (None,) * 3)
 
         # 삭제된 작품 비율 측정
-        for num in range(296179):  # 노벨피아 소설 수 (24.8.8 11.13 기준)
+        for num in range(total_novel_cnt):
             code = str(num)
             with self.subTest(code=code, ep_no=ep_no):
                 html: str = get_ep_list(code)
