@@ -4,6 +4,20 @@ from urllib.parse import urljoin, urlparse
 from src.common.module import *
 
 
+def ends_with_vowel(kr_string: str) -> bool:
+    """
+    입력받은 한글 문자열의 종성의 모음 여부를 반환하는 함수
+
+    :param kr_string: 한글 문자열
+    :return: 모음 - True / 모음 외 나머지 - False
+    """
+
+    # (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00
+    # 참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
+
+    return (ord(kr_string[-1]) - 0xAC00) % 28 == 0
+
+
 def extract_alert_msg(soup, title: str) -> str:
     """
     소설 메인 페이지에서 알림 창의 오류 메시지를 추출하는 함수
@@ -281,7 +295,7 @@ def main() -> None:
         print_under_new_line(f"`예외 발생: {ke = }")
         print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요. Markdown 파일은 {novel_markdown_dir} 에 쓸게요.")
 
-    novel_code: str = str(ask_for_number("소설 번호"))
+    novel_code: str = str(ask_for_num("소설 번호"))
 
     novel_main_page_url: str = urljoin(base_url, novel_code)  # https://novelpia.com/novel/1
     novel_main_page_html: str = get_novel_main_page(novel_main_page_url)
