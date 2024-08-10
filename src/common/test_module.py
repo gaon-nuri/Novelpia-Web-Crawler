@@ -16,6 +16,14 @@ class TestHasPrologue(unittest.TestCase):
         self.assertTrue(has_prologue(code_with_p) and not has_prologue(code_without))
 
 
+class CntNovelWithPrologue(unittest.TestCase):
+    def test_cnt_novel_with_prologue(self):
+        for num in range(1, total_novel_cnt):
+            code = str(num)
+            with self.subTest(code=code):
+                self.assertTrue(has_prologue(code))
+
+
 class TestGetEnvVar(unittest.TestCase):
     """
     입력받은 이름의 환경 변수가 있는 경우와 없는 경우 모두 테스트
@@ -89,28 +97,32 @@ class GetNovelMainPage(unittest.TestCase):
 
 
 class GetEpListAndInfo(unittest.TestCase):
-    from src.viewer.viewer import extract_ep_info
-
-    @staticmethod
-    def get_ep_info(html, ep_no, login):
-        return GetEpListAndInfo.extract_ep_info(html, ep_no, login)
 
     def test_invalid_novel_code(self):
         code: str = "0"
         ep_no: int = 16
-        answer_title: str = "계월향의 꿈"
 
         html: str = get_ep_list(code)
-        ep_info: str = self.get_ep_info(html, ep_no, False)
-        ep_title = ep_info[0]
+        info_dic: dict = extract_ep_info(html, ep_no, False)
+        answer_dic: dict = {
+            "제목": "계월향의 꿈",
+            "위치": {"화수": 0, "번호": None},
+            "유형": {}.fromkeys(["무료", "성인"]),
+            # "유형": {"무료": True, "성인": False},
+            "통계": {}.fromkeys(["글자수", "조회수", "댓글수", "추천수"]),
+        }
+        # answer_dic["통계"]["글자수"] = 117
 
-        self.assertEqual(ep_title, answer_title)
+        self.assertDictEqual(info_dic, answer_dic)
 
-    def test_novel_on_service(self):
-
+    def test_extract_ep_title(self):
+        """
+        회차의 제목을 문자열로 추출.
+        :return: 원 제목과 일치 시 성공
+        """
         test_set: set[tuple[str, str, int, str]] = {
-            ("610", "DOWN", 1, "001. 능력 각성"),
-            ("145916", "UP", 1, "완결 후기"),
+            ("610", "DOWN", 1, "001. 능력 각성"),  # <창작물 속으로>
+            ("145916", "UP", 1, "완결 후기"),  # <시계탑의 폐인 공작님과 마검 속 소녀>
         }
 
         for test_params in test_set:
@@ -118,32 +130,51 @@ class GetEpListAndInfo(unittest.TestCase):
 
             with self.subTest(code=code, sort=sort, ep_no=ep_no, title_a=title_a):
                 html: str = get_ep_list(code, sort)
-                ep_info: str = self.get_ep_info(html, ep_no, False)
-                title_q = ep_info[0]
+                ep_info: dict = extract_ep_info(html, ep_no, False)
+                title_q = ep_info["제목"]
 
                 self.assertEqual(title_q, title_a)
 
-    def test_deleted_novel(self):
-
-        code: str = "2"
+    def test_no_ep_novel(self):
+        """
+        회차의 제목, 화수, 번호를 Tuple 로 추출.
+        :return: (None, None, None) 반환 시 성공
+        """
+        code: str = "4"
         html: str = get_ep_list(code)
-        ep_info: tuple = self.get_ep_info(html, 1, False)
+        info_dic: dict = extract_ep_info(html, 1, False)
+        empty_dic: dict = {
+            "제목": None,
+            "위치": {}.fromkeys([i for i in range(3)]),
+            "유형": {}.fromkeys([i for i in range(2)]),
+            "통계": {}.fromkeys([i for i in range(4)]),
+        }
 
-        self.assertTupleEqual(ep_info, (None,) * 3)
+        self.assertDictEqual(info_dic, empty_dic)
 
 
-class CntDeletedNovel(GetEpListAndInfo):
+class CntNoEpNovel(GetEpListAndInfo):
     """
-    노벨피아 소설 중 삭제된 작품의 비율을 측정하는 테스트
+    작성된 회차가 없는 작품의 비율을 측정하는 테스트
     """
-    def test_cnt_deleted_novel(self):
+    def test_cnt_no_ep_novel(self):
+        """
+        회차의 제목, 화수, 번호를 Tuple 로 추출.
+        :return: (None, None, None) 반환 시 성공
+        """
         for num in range(1, total_novel_cnt):
             code = str(num)
             with self.subTest(code=code):
                 html: str = get_ep_list(code)
-                ep_info: tuple = self.get_ep_info(html, 1, False)
+                info_dic: dict = extract_ep_info(html, 1, False)
+                empty_dic: dict = {
+                    "제목": None,
+                    "위치": {}.fromkeys(["화수", "번호"]),
+                    "유형": {}.fromkeys(["무료", "성인"]),
+                    "통계": {}.fromkeys(["글자수", "조회수", "댓글수", "추천수"]),
+                }
 
-                self.assertTupleEqual(ep_info, (None,) * 3)
+                self.assertDictEqual(info_dic, empty_dic)
 
 
 if __name__ == '__main__':
