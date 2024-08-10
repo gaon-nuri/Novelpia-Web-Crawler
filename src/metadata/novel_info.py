@@ -40,6 +40,8 @@ def extract_alert_msg(soup, title: str) -> str:
         0: 잘못된 소설 번호 입니다. (제목, 줄거리 無)
         2: 삭제된 소설 입니다. (제목 有, 줄거리 無)
         200000: 잘못된 접근입니다. (제목 有, 줄거리 無)
+        - 연습등록작품은 작가만 열람이 가능
+        - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
         """
         if msg == "잘못된 소설 번호 입니다.":
             pass
@@ -127,6 +129,11 @@ def extract_novel_info(main_page_html: str) -> dict:
     # 제목 추출
     title = soup.title.text[22:]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
 
+    """
+    - 브라우저 상에 제목표시줄에 페이지 위치나 소설명이 표기됨.
+    - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
+    """
+
     # 소설 Main Webpage URL 추출
     # tag: <meta content="https://novelpia.com/novel/1" property="og:url"/>
     meta_url_tag = soup.select_one("meta[property='og:url']")
@@ -170,6 +177,13 @@ def extract_novel_info(main_page_html: str) -> dict:
 
         # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
         tag_set = soup.select("p.writer-tag span.tag")
+
+        """
+        - 소설 등록시 최소 2개 이상의 해시태그를 지정해야 등록, 수정이 가능.
+        - 모바일/PC 페이지가 같이 들어 있어서 태그가 중복 추출됨.
+        - 최소 해시태그 추가 공지: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
+        - 모바일 태그 표기 공지: <2021년 01월 14일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4783/)>
+        """
 
         # PC, 모바일 중복 해시태그 제거
         indices: int = int(len(tag_set) / 2)  # 3
