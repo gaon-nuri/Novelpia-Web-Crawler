@@ -12,7 +12,7 @@ class TestHasPrologue(unittest.TestCase):
     """
     def test_prologue_found(self):
         code_with_p: str = "145916"  # <시계탑의 페인 공작님과 마검 소녀>
-        code_without: str = "247416"  # <숨겨진 흑막이 되었다>
+        code_without: str = "4"  # <숨겨진 흑막이 되었다>
         self.assertTrue(has_prologue(code_with_p) and not has_prologue(code_without))
 
 
@@ -103,16 +103,18 @@ class GetEpListAndInfo(unittest.TestCase):
         ep_no: int = 16
 
         html: str = get_ep_list(code)
-        info_dic: dict = extract_ep_info(html, ep_no, False)
+        info_dic: dict = extract_ep_info(html, ep_no)
         answer_dic: dict = {
             "제목": "계월향의 꿈",
-            "위치": {"화수": 0, "번호": None},
-            "유형": {}.fromkeys(["무료", "성인"]),
-            # "유형": {"무료": True, "성인": False},
-            "통계": {}.fromkeys(["글자수", "조회수", "댓글수", "추천수"]),
+            "위치": {"화수": 0, "번호": '978'},
+            "유형": {"무료": True, "성인": False},
+            "통계": {
+                "글자수": 117,
+                "조회수": None,
+                "댓글수": None,
+                "추천수": None,
+            },
         }
-        # answer_dic["통계"]["글자수"] = 117
-
         self.assertDictEqual(info_dic, answer_dic)
 
     def test_extract_ep_title(self):
@@ -130,7 +132,7 @@ class GetEpListAndInfo(unittest.TestCase):
 
             with self.subTest(code=code, sort=sort, ep_no=ep_no, title_a=title_a):
                 html: str = get_ep_list(code, sort)
-                ep_info: dict = extract_ep_info(html, ep_no, False)
+                ep_info: dict = extract_ep_info(html, ep_no)
                 title_q = ep_info["제목"]
 
                 self.assertEqual(title_q, title_a)
@@ -140,17 +142,21 @@ class GetEpListAndInfo(unittest.TestCase):
         회차의 제목, 화수, 번호를 Tuple 로 추출.
         :return: (None, None, None) 반환 시 성공
         """
-        code: str = "4"
+        code: str = "31"
         html: str = get_ep_list(code)
-        info_dic: dict = extract_ep_info(html, 1, False)
-        empty_dic: dict = {
-            "제목": None,
-            "위치": {}.fromkeys([i for i in range(3)]),
-            "유형": {}.fromkeys([i for i in range(2)]),
-            "통계": {}.fromkeys([i for i in range(4)]),
+        info_dic: dict = extract_ep_info(html, 1)
+        answer_dic: dict = {
+            "제목": "프롤로그",
+            "위치": {"화수": 0, "번호": '283'},
+            "유형": {"무료": True, "성인": False},
+            "통계": {
+                "글자수": 3080,
+                "조회수": None,
+                "댓글수": None,
+                "추천수": None,
+            },
         }
-
-        self.assertDictEqual(info_dic, empty_dic)
+        self.assertDictEqual(info_dic, answer_dic)
 
 
 class CntNoEpNovel(GetEpListAndInfo):
@@ -166,14 +172,13 @@ class CntNoEpNovel(GetEpListAndInfo):
             code = str(num)
             with self.subTest(code=code):
                 html: str = get_ep_list(code)
-                info_dic: dict = extract_ep_info(html, 1, False)
+                info_dic: dict = extract_ep_info(html, 1)
                 empty_dic: dict = {
                     "제목": None,
                     "위치": {}.fromkeys(["화수", "번호"]),
                     "유형": {}.fromkeys(["무료", "성인"]),
                     "통계": {}.fromkeys(["글자수", "조회수", "댓글수", "추천수"]),
                 }
-
                 self.assertDictEqual(info_dic, empty_dic)
 
 
