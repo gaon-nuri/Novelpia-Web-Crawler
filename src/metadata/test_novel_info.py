@@ -112,7 +112,7 @@ tags:
 
 class GetNovelStatus(unittest.TestCase):
     """
-    노벨피아의 연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트.
+    연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트.
     """
     @staticmethod
     def chk_up_status(novel_code: str) -> str:
@@ -148,7 +148,7 @@ class GetNovelStatus(unittest.TestCase):
 
 class CntNovelInStatus(GetNovelStatus):
     """
-    노벨피아의 소설 중 특정 연재 상태의 소설 비율을 재는 테스트
+    특정 연재 상태의 소설 비율을 재는 테스트
     """
     @staticmethod
     def chk_up_status(novel_code: str):
