@@ -5,14 +5,26 @@ from src.metadata.novel_info import *
 
 
 class GetFinalJamo(unittest.TestCase):
-    def test_final_jamo(self):
-        kor_str_vowel_end: str = "창작물 속으로"
-        kor_str_cons_end: str = "매도당하고 싶은 엘프님"
+    ko_word_v_end: str = "창작물 속으로"
+    ko_word_c_end: str = "매도당하고 싶은 엘프님"
 
-        is_fin_vowel: bool = ends_with_vowel(kor_str_vowel_end)
-        is_fin_cons: bool = ends_with_vowel(kor_str_cons_end)
+    v_post: list = ["가", "를", "는", "야"]
+    c_post: list = ["이", "을", "은", "아"]
+    q_post: list = ["이", "을", "은", "아"]
 
-        self.assertTrue(is_fin_vowel and not is_fin_cons)
+    def test_final_consonant(self):
+        word: str = GetFinalJamo.ko_word_c_end
+        args: list = GetFinalJamo.q_post
+        a_post: list = list(map(get_postposition, [word] * 4, args))
+
+        self.assertEqual(a_post, GetFinalJamo.c_post)
+
+    def test_final_vowel(self):
+        word: str = GetFinalJamo.ko_word_v_end
+        args: list = GetFinalJamo.q_post
+        a_post: list = list(map(get_postposition, [word] * 4, args))
+
+        self.assertEqual(a_post, GetFinalJamo.v_post)
 
 
 class GetUploadDate(unittest.TestCase):
@@ -27,10 +39,10 @@ class GetUploadDate(unittest.TestCase):
         fst_up_date: str = "2023-12-11"
         lst_up_date: str = "2024-04-18"
 
-        fst_up_date_match: bool = get_ep_up_date(code, "DOWN") == fst_up_date
-        lst_up_date_match: bool = get_ep_up_date(code, "UP") == lst_up_date
+        fst_match: bool = get_ep_up_date(code, "DOWN") == fst_up_date
+        lst_match: bool = get_ep_up_date(code, "UP") == lst_up_date
 
-        self.assertTrue(fst_up_date_match and lst_up_date_match)
+        self.assertTrue(fst_match and lst_match)
 
     def test_no_ep(self):
         code: str = "2"  # <건물주 아들>, 최초의 삭제된 소설. 동명의 9번 소설의 습작?
@@ -38,16 +50,16 @@ class GetUploadDate(unittest.TestCase):
         self.assertIsNone(get_ep_up_date(code))
 
 
-class CntNoEpNovel(unittest.TestCase):
-    def test_cnt_no_ep_novel(self):
-        """
-        노벨피아 소설 중 작성된 회차가 없는 작품을 세는 테스트
-        :return: 회차가 없으면 성공, 있으면 실패
-        """
-        for num in range(1, total_novel_cnt):
-            code = str(num)
-            with self.subTest(code=code):
-                self.assertIsNone(get_ep_up_date(code))
+# class CntNoEpNovel(unittest.TestCase):
+#     def test_cnt_no_ep_novel(self):
+#         """
+#         노벨피아 소설 중 작성된 회차가 없는 작품을 세는 테스트
+#         :return: 회차가 없으면 성공, 있으면 실패
+#         """
+#         for num in range(1, total_novel_cnt):
+#             code = str(num)
+#             with self.subTest(code=code):
+#                 self.assertIsNone(get_ep_up_date(code))
 
 
 class ConvertToMarkdown(unittest.TestCase):
@@ -117,10 +129,10 @@ class GetNovelStatus(unittest.TestCase):
     @staticmethod
     def chk_up_status(novel_code: str) -> str:
         """
-        소설의 연재 상태를 추출하여 반환하는 함수
+        입력받은 번호의 소설의 연재 상태를 추출하여 반환하는 함수
 
         :param novel_code: 소설 번호
-        :return: '완결', '연재중단', '연재지연', '연재중' 중 택 1
+        :return: '삭제', '완결', '연재중단', '연재지연', '연재중' 중 택 1
         """
         url: str = f"https://novelpia.com/novel/{novel_code}"
         html: str = get_novel_main_page(url)
@@ -128,22 +140,24 @@ class GetNovelStatus(unittest.TestCase):
         info_dic: dict = extract_novel_info(html)
         flag_dic: dict = info_dic["badge_dic"]
 
-        for key in ["완결", "연재지연", "연재중단"]:
+        for key in ["삭제", "완결", "연재지연", "연재중단"]:
             if flag_dic[key]:
                 return key
 
         return "연재중"
 
     def test_get_novel_status(self):
-        code_on_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
+        code_deleted: str = "2"  # <건물주 아들> - 최초의 삭제작
+        code_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
 
-        on_hiatus: bool = (self.chk_up_status(code_on_hiatus) == "연재중단")
-        completed: bool = (self.chk_up_status(code_completed) == "완결")
+        deleted: bool = (self.chk_up_status(code_deleted) == "삭제")
+        hiatus: bool = (self.chk_up_status(code_hiatus) == "연재중단")
+        compl: bool = (self.chk_up_status(code_completed) == "완결")
         ongoing: bool = (self.chk_up_status(code_ongoing) == "연재중")
 
-        self.assertTrue(on_hiatus and not completed or ongoing)
+        self.assertTrue(deleted and hiatus and compl and ongoing)
 
 
 class CntNovelInStatus(GetNovelStatus):
@@ -162,9 +176,19 @@ class CntNovelInStatus(GetNovelStatus):
             code = str(num)
             with self.subTest(code=code):
                 up_status: str = self.chk_up_status(code)
-                is_on_hiatus: bool = (up_status == "연재지연") or (up_status == "연재중단")
 
-                self.assertTrue(is_on_hiatus)
+                self.assertTrue(up_status == "연재지연" or up_status == "연재중단")
+
+    def test_cnt_deleted_novel(self, status: str = "삭제"):
+        """
+        삭제작 비율을 재는 테스트
+        """
+        for num in range(1, total_novel_cnt):
+            code = str(num)
+            with self.subTest(code=code):
+                up_status: str = self.chk_up_status(code)
+
+                self.assertTrue(up_status == status)
 
 
 if __name__ == '__main__':
