@@ -4,18 +4,34 @@ from urllib.parse import urljoin, urlparse
 from src.common.module import *
 
 
-def ends_with_vowel(kr_string: str) -> bool:
+def get_postposition(kr_word: str, postposition: str) -> str:
     """
-    입력받은 한글 문자열의 종성의 모음 여부를 반환하는 함수
+    입력받은 한글 단어의 종성에 맞는 조사의 이형태를 반환하는 함수
 
-    :param kr_string: 한글 문자열
+    :param kr_word: 한글 문자열
+    :param postposition: 원래 조사
     :return: 모음 - True / 모음 외 나머지 - False
     """
 
     # (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00
     # 참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
 
-    return (ord(kr_string[-1]) - 0xAC00) % 28 == 0
+    v_post: tuple = ("가", "를", "는", "야")
+    c_post: tuple = ("이", "을", "은", "아")
+    # post_dic = dict(zip(vowel_post, consonant_post))
+
+    ends_with_vowel: bool = ((ord(kr_word[-1]) - 0xAC00) % 28 == 0)
+
+    for v, c in zip(v_post, c_post):
+        if postposition == v:
+            if not ends_with_vowel:
+                return c
+            return v
+        elif postposition == c:
+            if ends_with_vowel:
+                return v
+            else:
+                return c
 
 
 def extract_alert_msg(soup, title: str) -> str:
@@ -46,22 +62,23 @@ def extract_alert_msg(soup, title: str) -> str:
         if msg == "잘못된 소설 번호 입니다.":
             pass
         elif msg == "잘못된 접근입니다.":
-            msg = f"<{title}> 에 대한 {msg}"
+            msg = f"<{title}>에 대한 {msg}"
         elif msg == "삭제된 소설 입니다.":
-            msg = f"<{title}> 은(는) {msg}"
+            postposition: str = get_postposition(title, "은")
+            msg = f"<{title}>{postposition} {msg}"
 
         return msg
 
 
-def get_ep_up_date(novel_code: str, sort_method: str = "DOWN") -> str | None:
+def get_ep_up_date(novel_code: str, sort: str = "DOWN") -> str | None:
     """
     소설의 회차 목록에서 첫/마지막 회차 게시일을 추출하여 반환하는 함수
 
     :param novel_code: 소설 번호
-    :param sort_method: "DOWN", 첫화부터 / "UP", 최신화부터
+    :param sort: "DOWN", 첫화부터 / "UP", 최신화부터
     :return: 첫/마지막 회차 게시일. 작성된 회차가 없으면 None
     """
-    ep_list_html = get_ep_list(novel_code, sort_method, 1)
+    ep_list_html = get_ep_list(novel_code, sort, 1)
     ep_list_soup = BeautifulSoup(ep_list_html, "html.parser")
 
     # 회차 목록 표 추출
@@ -90,7 +107,7 @@ def get_ep_up_date(novel_code: str, sort_method: str = "DOWN") -> str | None:
 
 def extract_novel_info(main_page_html: str) -> dict:
     """
-    소설 Main Webpage HTML 문자열을 입력받아 Metadata 를 반환하는 함수
+    입력받은 소설의 메인 페이지 HTML에서 정보를 추출하여 반환하는 함수
 
     :param main_page_html: 소설 Metadata 를 추출할 HTML
     :return: 추출한 Metadata 가 담긴 Dict
@@ -102,6 +119,7 @@ def extract_novel_info(main_page_html: str) -> dict:
         "solePick": "",
         "tagList": ["",],
         "badge_dic": {x: False for x in [
+                "삭제",
                 "완결",
                 "연재지연",
                 "연재중단",
@@ -127,12 +145,12 @@ def extract_novel_info(main_page_html: str) -> dict:
     soup = BeautifulSoup(main_page_html, "html.parser")
 
     # 제목 추출
-    title = soup.title.text[22:]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
-
+    html_title = soup.title.text[22:]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
     """
     - 브라우저 상에 제목표시줄에 페이지 위치나 소설명이 표기됨.
     - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
     """
+    info_dic["title"] = html_title
 
     # 소설 Main Webpage URL 추출
     # tag: <meta content="https://novelpia.com/novel/1" property="og:url"/>
@@ -144,86 +162,89 @@ def extract_novel_info(main_page_html: str) -> dict:
     novel_code: str = urlparse(novel_page_url).path.split("/")[-1]  # "https://novelpia.com/novel/1" > "1"
 
     # 소설 서비스 상태 확인
-    try:
-        # 제목 추출, 검사, 등록
-        if title == soup.select_one("div.epnew-novel-title").string:  # '창작물 속으로'
-            info_dic["title"] = title
+    novel_title_tag: Tag = soup.select_one("div.epnew-novel-title")
 
     # 서비스 상태 비정상, 소설 정보를 받지 못함
-    except AttributeError as ae:
-        print_under_new_line(f"[오류] 예외 발생: {ae = }")
+    if novel_title_tag is None:
 
-        # 알림 창 추출
-        alert_msg: str = extract_alert_msg(soup, title)
+        # 오류 메시지 추출
+        alert_msg: str = extract_alert_msg(soup, html_title)
 
-        # 오류 메시지 출력 후 종료
-        print()
+        if alert_msg.endswith("삭제된 소설 입니다."):
+            info_dic["badge_dic"]["삭제"] = True
+
+        # 오류 메시지 출력
         exit_code = f"[노벨피아] {alert_msg}"
-        exit(exit_code)
+        print_under_new_line(exit_code)
 
-    # 서비스 상태 정상, 계속 진행
-    else:
-        # 작가명 추출
-        info_dic["author"]: str = soup.select_one("a.writer-name").string.strip()  # '제울'
+        return info_dic
 
-        print_under_new_line(f"[알림] {info_dic['author']} 작가의 <{info_dic['title']}>은 정상적으로 서비스 중인 소설이에요.")
+    # 서비스 상태 정상, 제목 재추출 후 비교
+    novel_title: str = novel_title_tag.text
+    assert html_title == novel_title
 
-        # 연재 유형(자유/PLUS), 청불/독점작/챌린지/연중(및 지연)/완결 여부
-        badge_list: list[str] = [badge.text for badge in soup.select(".in-badge span")]
+    # 작가명 추출
+    author: str = soup.select_one("a.writer-name").string.strip()  # '제울'
+    info_dic["author"] = author
 
-        for flag in badge_list:
-            if flag in info_dic["badge_dic"].keys():
-                info_dic["badge_dic"][flag] = True
+    print_under_new_line(f"[알림] {author} 작가의 <{html_title}>은 정상적으로 서비스 중인 소설이에요.")
 
-        # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
-        tag_set = soup.select("p.writer-tag span.tag")
+    # 연재 유형(자유/PLUS), 청불/독점작/챌린지/연중(및 지연)/완결 여부
+    badge_list: list[str] = [badge.text for badge in soup.select(".in-badge span")]
 
-        """
-        - 소설 등록시 최소 2개 이상의 해시태그를 지정해야 등록, 수정이 가능.
-        - 모바일/PC 페이지가 같이 들어 있어서 태그가 중복 추출됨.
-        - 최소 해시태그 추가 공지: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
-        - 모바일 태그 표기 공지: <2021년 01월 14일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4783/)>
-        """
+    for flag in badge_list:
+        if flag in info_dic["badge_dic"].keys():
+            info_dic["badge_dic"][flag] = True
 
-        # PC, 모바일 중복 해시태그 제거
-        indices: int = int(len(tag_set) / 2)  # 3
-        info_dic["tagList"]: list[str] = [i.string for i in tag_set[:indices]]  # ['판타지','#현대', '#하렘']
+    # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
+    tag_set = soup.select("p.writer-tag span.tag")
 
-        # 조회, 추천수 추출
-        ep_stat_list: list[str] = [i.string.replace(",", "") for i in soup.select("div.counter-line-a span")]
-        info_dic["ep_stat_dic"]["view"] = int(ep_stat_list[1])  # 83,050,765 > 83050765
-        info_dic["ep_stat_dic"]["recommend"] = int(ep_stat_list[3])  # 4,540,540 > 4540540
+    """
+    - 소설 등록시 최소 2개 이상의 해시태그를 지정해야 등록, 수정이 가능.
+    - 모바일/PC 페이지가 같이 들어 있어서 태그가 중복 추출됨.
+    - 최소 해시태그 추가 공지: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
+    - 모바일 태그 표기 공지: <2021년 01월 14일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4783/)>
+    """
 
-        # 인생픽 순위 추출
-        sole_pick_rank: str = soup.select(".counter-line-b span")[1].text
+    # PC, 모바일 중복 해시태그 제거
+    indices: int = int(len(tag_set) / 2)  # 3
+    info_dic["tagList"]: list[str] = [i.string for i in tag_set[:indices]]  # ['판타지','#현대', '#하렘']
 
-        # 인생픽 순위 공개 중, 속성 추가
-        if sole_pick_rank[-1] == "위":  # 40위
-            info_dic["solePick"] = "\n인생픽: " + sole_pick_rank  # 인생픽: 40위 (Markdown 속성 문법)
+    # 조회, 추천수 추출
+    ep_stat_list: list[str] = [i.string.replace(",", "") for i in soup.select("div.counter-line-a span")]
+    info_dic["ep_stat_dic"]["view"] = int(ep_stat_list[1])  # 83,050,765 > 83050765
+    info_dic["ep_stat_dic"]["recommend"] = int(ep_stat_list[3])  # 4,540,540 > 4540540
 
-        # 비공개 상태일 시 넘어가기
-        elif sole_pick_rank == "공개전":
-            pass
+    # 인생픽 순위 추출
+    sole_pick_rank: str = soup.select(".counter-line-b span")[1].text
 
-        # 회차, 알람, 선호수 추출
-        user_stat_li: list[str] = [i.string.replace(",", "") for i in soup.select("span.writer-name")]
-        user_stat_li[2] = user_stat_li[2].removesuffix("회차")  # 2538회차 > 2538
-        user_stat_li_int: list[int] = [int(user_stat) for user_stat in user_stat_li][::-1]
+    # 인생픽 순위 공개 중, 속성 추가
+    if sole_pick_rank[-1] == "위":  # 40위
+        info_dic["solePick"] = "\n인생픽: " + sole_pick_rank  # 인생픽: 40위 (Markdown 속성 문법)
 
-        info_dic["user_stat_dic"] = dict(zip(info_dic["user_stat_dic"].keys(), user_stat_li_int))
+    # 비공개 상태일 시 넘어가기
+    elif sole_pick_rank == "공개전":
+        pass
 
-        # 프롤로그 존재 시 회차 수 1 가산
-        # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
-        if has_prologue(novel_code):
-            info_dic["user_stat_dic"]["ep"] += 1
+    # 회차, 알람, 선호수 추출
+    user_stat_li: list[str] = [i.string.replace(",", "") for i in soup.select("span.writer-name")]
+    user_stat_li[2] = user_stat_li[2].removesuffix("회차")  # 2538회차 > 2538
+    user_stat_li_int: list[int] = [int(user_stat) for user_stat in user_stat_li][::-1]
 
-        # 줄거리 추출
-        info_dic["synopsis"]: str = soup.select_one(".synopsis").text
+    info_dic["user_stat_dic"] = dict(zip(info_dic["user_stat_dic"].keys(), user_stat_li_int))
 
-        # 작성된 회차 有, 공개 일자 추출
-        if info_dic["user_stat_dic"]["ep"] != 0:
-            info_dic["fstUploadDate"] = get_ep_up_date(novel_code, "DOWN")
-            info_dic["lstUploadDate"] = get_ep_up_date(novel_code, "UP")
+    # 프롤로그 존재 시 회차 수 1 가산
+    # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
+    if has_prologue(novel_code):
+        info_dic["user_stat_dic"]["ep"] += 1
+
+    # 줄거리 추출
+    info_dic["synopsis"]: str = soup.select_one(".synopsis").text
+
+    # 작성된 회차 有, 공개 일자 추출
+    if info_dic["user_stat_dic"]["ep"] != 0:
+        info_dic["fstUploadDate"] = get_ep_up_date(novel_code, "DOWN")
+        info_dic["lstUploadDate"] = get_ep_up_date(novel_code, "UP")
 
     return info_dic
 
