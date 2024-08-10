@@ -1,9 +1,12 @@
+import json
 import os  # os.environ[]
 import time
 from pathlib import Path
+from typing import Iterable  # Type Hint: str | Iterable[str]
 
 import requests as req
 from bs4 import BeautifulSoup
+from bs4.element import ResultSet, Tag
 
 # Windows Chrome User-Agent String
 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
@@ -248,17 +251,16 @@ def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, use_login_key: boo
     return html
 
 
-def extract_ep_info(list_html: str, ep_no: int = 1, login: bool = True) -> dict:
+def extract_ep_info(list_html: str, ep_no: int = 1) -> dict:
     """
-    회차 목록에서 특정 회차의 제목, 회차 화수, URL 을 추출하여 반환하는 함수
+    회차 목록에서 특정 회차의 제목, 화수, URL 을 추출하여 반환하는 함수
 
     :param list_html: 회차 목록 HTML
     :param ep_no: 추출할 회차의 목록 내 서수 (1부터 20까지)
-    :param login: 로그인 키 사용 여부
-    :return: 회차 제목, 회차 화수, 회차 번호 (로그인 키 미사용 시 None)
+    :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천수
     """
     list_soup = BeautifulSoup(list_html, "html.parser")
-    list_set = list_soup.select("tr.ep_style5 td.font12")
+    list_set: ResultSet[Tag] = list_soup.select("tr.ep_style5")
 
     info_dic: dict = {
         "제목": None,
@@ -268,14 +270,13 @@ def extract_ep_info(list_html: str, ep_no: int = 1, login: bool = True) -> dict:
     }
 
     try:
-        tag = list_set[ep_no - 1]
-
+        ep_tag: Tag = list_set[ep_no - 1]
     except IndexError as ie:
         print_under_new_line(f"예외 발생: {ie = }")
         return info_dic
 
     else:
-        info_li: list[str] = tag.text.split()
+        # info_li: list[str] = ep_tag.text
         """
         회차 정보 목록 추출
         예시 1. ['무료', '프롤로그', 'EP.0', '21', '21.01.07']
@@ -283,35 +284,38 @@ def extract_ep_info(list_html: str, ep_no: int = 1, login: bool = True) -> dict:
         예시 3. ['무료', '프롤로그', 'EP.0', '509', '3', '1', '21.01.07']
         예시 4. ['무료', '19', '봉인해제', 'EP.1', '2,732', '21.01.07']
         """
+        # 각종 텍스트 추출
+        headline: Tag = ep_tag.b
 
-        # 제목 위치 추정
-        title_start_index: int = 1
+        # 제목 추출
+        title: str = headline.i.next
+        info_dic["제목"] = title
 
-        if info_li[1] == "19":
-            title_start_index = 2
+        # 유형 추출
+        tags: ResultSet[Tag] = headline.select(".s_inv")
+        price_tag: Tag = tags[0]
+        class_li: str | Iterable[str] = price_tag.attrs['class']
 
-        # 조회, 댓글, 추천 모두 有
-        ep_no_index: int = -5
+        if 'b_free' in class_li:
+            info_dic["유형"]["무료"] = True
+        elif 'b_plus' in class_li:
+            info_dic["유형"]["무료"] = False
 
+        if len(tags) > 1:
+            info_dic["유형"]["성인"] = True
+        else:
+            info_dic["유형"]["성인"] = False
+
+        # 각종 정보 추출
+        stats: Tag = ep_tag.select_one("div.ep_style2 font")
+
+        # 회차 화수 표기 추출
+        no_string: str = stats.span.text  # 'EP.1' / 'BONUS'
         """
         - 회차 목록 내 추천, 댓글수 표기 기능이 늦게 나와서 작품 연재 시기에 따라서 회차 화수 표기의 인덱스가 다를 수 있음
         - 추천수 추가 공지: <2021년 01월 08일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_1392/)>
         - 댓글, 추천, 조회수 표기 공지: <2021년 01월 12일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_3248/)>
         """
-        no_string: str
-
-        for i in range(3, 5):
-            no_string = info_li[-i]
-            if no_string.startswith("EP") or no_string == "BONUS":
-                ep_no_index: int = -i
-                break
-
-        # 제목 추출
-        title: str = " ".join(info_li[title_start_index:ep_no_index])  # '몸이 왜 이러지'
-        info_dic["제목"] = title
-
-        # 회차 화수 표기 추출
-        no_string = info_li[ep_no_index]  # 'EP.1' / 'BONUS'
 
         if no_string.startswith("EP"):
             ep_num = int(no_string.lstrip("EP."))
@@ -320,14 +324,74 @@ def extract_ep_info(list_html: str, ep_no: int = 1, login: bool = True) -> dict:
         else:
             info_dic["위치"]["화수"] = 'BONUS'
 
-        # 로그인 키 사용 시 회차 번호 추출
-        if login:
-            onclick_s: str = tag.attrs["onclick"]  # "$('.loads').show(); location ='/viewer/3274779'"
-            index: int = onclick_s.find("viewer")  # 38
-            code = onclick_s[index + 7: -1]  # "3274779"
-            info_dic["위치"]["번호"] = code
+        # 각종 수치 추출
+        stat_tag: Tag = stats.select("span")[1]
 
-            assert isinstance(int(code), int), "잘못된 소설 번호"
+        # 회차 번호 추출
+        # <span class="episode_count_view novel_count_view_7146">0</span>
+        view_tag: Tag = stat_tag.select_one(".episode_count_view")
+
+        # ("episode_count_view", "novel_count_view_7146")
+        class_li: str | Iterable[str] = view_tag.attrs['class']
+        ep_code: str = class_li[1].lstrip("novel_count_view_")
+        info_dic["위치"]["번호"] = ep_code
+
+        assert isinstance(int(ep_code), int), "잘못된 회차 번호"
+
+        # 소설 번호 추출
+        page_link_tag: Tag = list_soup.select_one(".page-link")
+        onclick: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
+        s_index: int = onclick.find("page")
+        e_index: int = onclick.find("]")
+        novel_code: str = onclick[s_index + 5: e_index - 1]
+
+        assert isinstance(int(novel_code), int), "잘못된 소설 번호"
+
+        # 조회수 추출
+        url: str = "https://novelpia.com/proc/novel"
+        form_data: dict = {
+            "cmd": "get_episode_count_view",
+            "episode_arr[]": f"episode_count_view {class_li[1]}",
+            "novel_no": novel_code,
+        }
+        headers: dict = {
+            "User-Agent": ua,
+            "Content-Type":
+            "application/x-www-form-urlencoded; charset=UTF-8"
+        }
+        res = req.post(url, form_data, headers=headers)
+
+        view_counts: list[dict] = json.loads(res.text)["list"]
+        view_count: int | None = None
+        view_s: str = "-1"
+
+        for dic in view_counts:
+            if dic["episode_no"] == int(ep_code):
+                view_s = dic["count_view"].replace(",", "")
+
+        if view_count is not None:
+            info_dic["통계"]["조회수"] = int(view_s)
+
+        def flatten(tag: Tag) -> int:
+            return int(tag.next.strip().replace(",", ""))
+
+        letter_cnt_tag: Tag = stat_tag.select_one("i.ion-document-text")
+        letter_cnt: int = flatten(letter_cnt_tag)
+        """
+        노벨피아 글자수 기준은 공백 문자 및 일부 문장 부호 제외.
+        공지 참고: https://novelpia.com/faq/all/view_383218/
+        """
+        info_dic["통계"]["글자수"] = letter_cnt
+
+        chat_tag: Tag = stat_tag.select_one("i.ion-chatbox-working")
+        if chat_tag is not None:
+            comments: int = flatten(chat_tag)
+            info_dic["통계"]["댓글수"] = comments
+
+        thumb_tag: Tag = stat_tag.select_one("i.ion-thumbsup")
+        if thumb_tag is not None:
+            thumbs_up: int = flatten(thumb_tag)
+            info_dic["통계"]["추천수"] = thumbs_up
 
         return info_dic
 
@@ -345,7 +409,8 @@ def has_prologue(novel_code: str) -> bool:
     공지 참고: https://novelpia.com/notice/all/view_1274648/
     """
 
-    ep_list_html = get_ep_list(novel_code)
-    title, ep_num, code = extract_ep_info(ep_list_html, login=False)
+    ep_list_html: str = get_ep_list(novel_code)
+    info_dic: dict = extract_ep_info(ep_list_html)
+    ep_num: int = info_dic["위치"]["화수"]
 
     return ep_num == 0
