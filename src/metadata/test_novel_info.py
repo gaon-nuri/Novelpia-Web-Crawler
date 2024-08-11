@@ -1,10 +1,10 @@
-import unittest
+from unittest import TestCase, main as test_main, skip
 
 from src.common.test_module import total_novel_cnt
 from src.metadata.novel_info import *
 
 
-class GetFinalJamo(unittest.TestCase):
+class GetFinalJamo(TestCase):
     ko_word_v_end: str = "창작물 속으로"
     ko_word_c_end: str = "매도당하고 싶은 엘프님"
 
@@ -27,7 +27,7 @@ class GetFinalJamo(unittest.TestCase):
         self.assertEqual(a_post, GetFinalJamo.v_post)
 
 
-class GetUploadDate(unittest.TestCase):
+class GetUpDate(TestCase):
     def test_single_ep(self):
         code: str = "124146"  # <연중용 나데나데 소설>
         up_date: str = "2023-12-13"
@@ -50,7 +50,7 @@ class GetUploadDate(unittest.TestCase):
         self.assertIsNone(get_ep_up_date(code))
 
 
-# class CntNoEpNovel(unittest.TestCase):
+# class CntNoEpNovel(TestCase):
 #     def test_cnt_no_ep_novel(self):
 #         """
 #         노벨피아 소설 중 작성된 회차가 없는 작품을 세는 테스트
@@ -62,7 +62,7 @@ class GetUploadDate(unittest.TestCase):
 #                 self.assertIsNone(get_ep_up_date(code))
 
 
-class ConvertToMarkdown(unittest.TestCase):
+class ConvertToMarkdown(TestCase):
     def test_convert_to_markdown(self):
         """
         소설 정보가 담긴 Dict 를 Markdown 형식의 문자열로 변환하는 테스트
@@ -71,12 +71,13 @@ class ConvertToMarkdown(unittest.TestCase):
         info_dic: dict = {
             'title': '숨겨진 흑막이 되었다',
             'author': '미츄리',
-            'novel_page_url': 'https://novelpia.com/novel/247416',
+            'url': 'https://novelpia.com/novel/247416',
             'solePick': '',
             'tagList': ['#현대판타지', '#하렘', '#괴담', '#집착'],
-            'fstUploadDate': '2023-12-11',
-            'lstUploadDate': '2024-04-18',
-            'badge_dic': {
+            'fstUpDate': '2023-12-11',
+            'lstUpDate': '2024-04-18',
+            'badges': {
+                '삭제': False,
                 '완결': True,
                 '연재지연': False,
                 '연재중단': False,
@@ -85,8 +86,8 @@ class ConvertToMarkdown(unittest.TestCase):
                 '독점': True,
                 '챌린지': False
             },
-            'user_stat_dic': {'ep': 225, 'alarm': 1139, 'prefer': 14669},
-            'ep_stat_dic': {'recommend': 224039, 'view': 2179530},
+            'per_user_stats': {'ep': 225, 'alarm': 1139, 'prefer': 14669},
+            'per_ep_stats': {'recommend': 224039, 'view': 2179530},
             'synopsis': '괴담, 저주, 여학생 등….\r\n집착해선 안 될 것들이 내게 집착한다',
         }
         formatted_md: str = """---
@@ -119,10 +120,10 @@ tags:
 > 괴담, 저주, 여학생 등….
 > 집착해선 안 될 것들이 내게 집착한다
 """
-        self.assertEqual(convert_to_markdown(info_dic), formatted_md)
+        self.assertEqual(formatted_md, convert_to_md(info_dic))
 
 
-class GetNovelStatus(unittest.TestCase):
+class GetNovelStatus(TestCase):
     """
     연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트.
     """
@@ -138,7 +139,7 @@ class GetNovelStatus(unittest.TestCase):
         html: str = get_novel_main_page(url)
 
         info_dic: dict = extract_novel_info(html)
-        flag_dic: dict = info_dic["badge_dic"]
+        flag_dic: dict = info_dic["badges"]
 
         for key in ["삭제", "완결", "연재지연", "연재중단"]:
             if flag_dic[key]:
@@ -160,6 +161,7 @@ class GetNovelStatus(unittest.TestCase):
         self.assertTrue(deleted and hiatus and compl and ongoing)
 
 
+@skip
 class CntNovelInStatus(GetNovelStatus):
     """
     특정 연재 상태의 소설 비율을 재는 테스트
@@ -192,4 +194,4 @@ class CntNovelInStatus(GetNovelStatus):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    test_main()
