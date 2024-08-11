@@ -1,7 +1,7 @@
-import json
-import os  # os.environ[]
-import time
+from json import JSONDecodeError, loads
+from os import environ
 from pathlib import Path
+from time import ctime
 from typing import Iterable  # Type Hint: str | Iterable[str]
 
 import requests as req
@@ -13,6 +13,11 @@ ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 
 
 def print_under_new_line(*msg: object) -> None:
+    """
+    빈 줄을 찍고 입력받은 문자열(들)을 출력하는 함수
+
+    :param msg: 출력할 문자열(들)
+    """
     print()
     print(*msg)
 
@@ -26,7 +31,7 @@ def get_env_var(key: str) -> str | None:
     """
     # 환경 변수 有, 반환
     try:
-        return os.environ[key]
+        return environ[key]
 
     # 환경 변수 無, 빈 문자열 반환
     except KeyError as ke:
@@ -58,7 +63,7 @@ def ask_for_num(num_type: str) -> int:
     """
     유효한 번호를 얻을 때까지 입력을 받는 함수
 
-    :param num_type:
+    :param num_type: 번호 유형
     :return: 번호 (자연수)
     """
     while True:
@@ -201,7 +206,7 @@ def open_file_if_none(file_name: Path) -> None:
 
     # 기존 파일 有
     if is_old_file_exist:
-        mtime: str = time.ctime(file_name.stat().st_mtime)
+        mtime: str = ctime(file_name.stat().st_mtime)
         question: str = f"[확인] {mtime} 에 수정된 파일이 있어요. 덮어 쓸까요?"
 
         # 사용자에게 덮어쓸 것인지 질문
@@ -221,14 +226,14 @@ def open_file_if_none(file_name: Path) -> None:
         print_under_new_line("[알림]", file_name, "에 새로 만들었어요.")
 
 
-def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, use_login_key: bool = False) -> str:
+def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = True) -> str:
     """
     서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
 
     :param code: 소설 번호
     :param sort: "DOWN", 첫화부터 / "UP", 최신화부터
     :param page: 요청할 페이지 번호
-    :param use_login_key: 로그인 키 사용 여부 (링크 추출용)
+    :param login: 로그인 키 사용 여부 (링크 추출용)
     :return: 게시일 순으로 정렬된 회차 목록의 한 페이지 (HTML)
     """
     # Chrome DevTools 에서 복사한 POST 요청 URL 및 양식 데이터
@@ -236,28 +241,78 @@ def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, use_login_key: boo
     form_data: dict = {"novel_no": code, "sort": sort, "page": page - 1}  # 1페이지 -> page = 0, ...
     headers: dict[str: str] = {'User-Agent': ua}
 
-    # 로그인 O
-    if use_login_key:
-        login_key_added, headers_with_login_key = add_login_key(headers)
+    # 요청 헤더에 로그인 키 추가
+    if login:
+        login_key, headers = add_login_key(headers)
 
-        # 게시일 순으로 정렬된 회차 목록 요청
-        res = req.post(url=req_url, data=form_data, headers=headers_with_login_key)  # res: <Response [200]>
-
-    # 로그인 X
-    else:
-        res = req.post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
+    res = req.post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
 
     html: str = res.text
     return html
 
 
-def extract_ep_info(list_html: str, ep_no: int = 1) -> dict:
+def get_ep_view_cnts(novel_code: str, ep_codes: list[str]) -> list[int] | None:
     """
-    회차 목록에서 특정 회차의 제목, 화수, URL 을 추출하여 반환하는 함수
+    입력받은 소설의 회차들의 조회수를 응답받아 반환하는 함수
+
+    :param novel_code: 회차가 속한 소설 번호
+    :param ep_codes: 조회수를 받아올 회차들의 번호
+    :return: 조회수 목록
+    """
+    ep_cnt: int = len(ep_codes)
+
+    url: str = "https://novelpia.com/proc/novel"
+    form_data: dict = {
+        "cmd": "get_episode_count_view",
+        "episode_arr[]": ["episode_count_view novel_count_view_"] * ep_cnt,
+        "novel_no": novel_code,
+    }
+    headers: dict = {
+        "User-Agent": ua,
+    }
+    for i, code in enumerate(ep_codes):
+        form_data["episode_arr[]"][i] += code
+
+    login_key, login_headers = add_login_key(headers)
+    res = req.post(url, form_data, headers=login_headers)
+
+    view_cnt_json = res.text
+    """{
+        "status": 200,  # 유효한 요청
+        "code": "",
+        "errmsg": "",
+        "list": [{"episode_no": 3, "count_view": "1,057"}, ...]
+    }"""
+
+    # 응답에서 회차별 조회수 목록을 추출
+    try:
+        view_cnt_dics: list[dict] = loads(view_cnt_json)["list"]
+
+    # 잘못된 요청 URL, 작업(cmd), 헤더
+    # JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
+    except JSONDecodeError as je:
+        print_under_new_line("예외 발생: " + f"{je = }")
+        return None
+
+    view_cnts: list[int] = [-1] * ep_cnt
+
+    for i, dic in enumerate(view_cnt_dics):  # dic: {'count_view': '1', 'episode_no': 12606}
+        view_cnt: str = dic["count_view"]
+        view_cnts[i] = int(view_cnt.replace(",", ""))
+
+    # 잘못된 요청 데이터 (ep_codes > episode_arr[], novel_code > novel_no)
+    # assert view_cnts != [-1] * ep_cnt, "조회수를 받지 못했어요."
+
+    return view_cnts
+
+
+def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
+    """
+    목록에 적힌 회차의 각종 정보를 추출하여 반환하는 함수
 
     :param list_html: 회차 목록 HTML
     :param ep_no: 추출할 회차의 목록 내 서수 (1부터 20까지)
-    :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천수
+    :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천 수
     """
     list_soup = BeautifulSoup(list_html, "html.parser")
     list_set: ResultSet[Tag] = list_soup.select("tr.ep_style5")
@@ -265,135 +320,117 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict:
     info_dic: dict = {
         "제목": None,
         "위치": {}.fromkeys(["화수", "번호"]),
-        "유형": {}.fromkeys(["무료", "성인"]),
-        "통계": {}.fromkeys(["글자수", "조회수", "댓글수", "추천수"])
+        "유형": {}.fromkeys(["무료", "성인"], False),
+        "통계": {}.fromkeys(["글자 수", "조회수", "댓글 수", "추천 수"])
     }
-
     try:
         ep_tag: Tag = list_set[ep_no - 1]
-    except IndexError as ie:
-        print_under_new_line(f"예외 발생: {ie = }")
-        return info_dic
 
+    # 회차 못 찾음
+    except IndexError:
+        print_under_new_line("[오류] 선택한 회차를 찾지 못했어요.")
+
+        return None
+
+    # 회차 찾음
+    headline: Tag = ep_tag.b  # 각종 텍스트 추출
+
+    # 제목 추출
+    # <i class="icon ion-bookmark" id="bookmark_978" style="display:none;"></i>계월향의 꿈
+    info_dic["제목"] = headline.i.next
+
+    # 유형 추출
+    span_tags: ResultSet[Tag] = headline.select(".s_inv")  # <span class="b_free s_inv">무료</span>
+    class_s: str | Iterable[str] = span_tags[0].attrs['class']  # ['b_free', 's_inv']
+
+    if 'b_free' in class_s:
+        info_dic["유형"]["무료"] = True
+
+    if len(span_tags) > 1:
+        info_dic["유형"]["성인"] = True
+
+    # 각종 정보 추출
+    stats: Tag = ep_tag.select_one("div.ep_style2 font")
+
+    # 회차 화수 표기 추출
+    # stats.span: <span style="~">EP.0</span>
+    no_string: str = stats.span.text  # 'EP.1' / 'BONUS'
+    """
+    - 회차 목록 내 추천, 댓글 수 표기 기능이 늦게 나와서 작품 연재 시기에 따라서 회차 화수 표기의 인덱스가 다를 수 있음
+    - 추천 수 추가 공지: <2021년 01월 08일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_1392/)>
+    - 댓글, 추천, 조회수 표기 공지: <2021년 01월 12일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_3248/)>
+    """
+
+    if no_string.startswith("EP"):
+        ep_num = int(no_string.lstrip("EP."))
+        info_dic["위치"]["화수"] = ep_num
+
+    # 보너스 회차
     else:
-        # info_li: list[str] = ep_tag.text
-        """
-        회차 정보 목록 추출
-        예시 1. ['무료', '프롤로그', 'EP.0', '21', '21.01.07']
-        예시 2. ['무료', 'ㅇ', 'EP.1', '10', '6', '21.01.07']
-        예시 3. ['무료', '프롤로그', 'EP.0', '509', '3', '1', '21.01.07']
-        예시 4. ['무료', '19', '봉인해제', 'EP.1', '2,732', '21.01.07']
-        """
-        # 각종 텍스트 추출
-        headline: Tag = ep_tag.b
+        info_dic["위치"]["화수"] = 'BONUS'
 
-        # 제목 추출
-        title: str = headline.i.next
-        info_dic["제목"] = title
+    # 각종 수치 추출
+    stats_tag: Tag = stats.select("span")[1]
 
-        # 유형 추출
-        tags: ResultSet[Tag] = headline.select(".s_inv")
-        price_tag: Tag = tags[0]
-        class_li: str | Iterable[str] = price_tag.attrs['class']
+    # 회차 번호 추출
+    # <span class="episode_count_view novel_count_view_7146">0</span>
+    view_tag: Tag = stats_tag.select_one(".episode_count_view")
 
-        if 'b_free' in class_li:
-            info_dic["유형"]["무료"] = True
-        elif 'b_plus' in class_li:
-            info_dic["유형"]["무료"] = False
+    # ("episode_count_view", "novel_count_view_7146")
+    class_s: str | Iterable[str] = view_tag.attrs['class']
+    ep_code: str = class_s[1].lstrip("novel_count_view_")
+    info_dic["위치"]["번호"] = ep_code
 
-        if len(tags) > 1:
-            info_dic["유형"]["성인"] = True
-        else:
-            info_dic["유형"]["성인"] = False
+    assert isinstance(int(ep_code), int), "잘못된 회차 번호"
 
-        # 각종 정보 추출
-        stats: Tag = ep_tag.select_one("div.ep_style2 font")
+    # 소설 번호 추출
+    page_link_tag: Tag = list_soup.select_one(".page-link")
+    click: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
+    novel_code: str = click[click.find("page") + 5: click.find("]") - 1]
 
-        # 회차 화수 표기 추출
-        no_string: str = stats.span.text  # 'EP.1' / 'BONUS'
-        """
-        - 회차 목록 내 추천, 댓글수 표기 기능이 늦게 나와서 작품 연재 시기에 따라서 회차 화수 표기의 인덱스가 다를 수 있음
-        - 추천수 추가 공지: <2021년 01월 08일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_1392/)>
-        - 댓글, 추천, 조회수 표기 공지: <2021년 01월 12일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_3248/)>
-        """
+    assert isinstance(int(novel_code), int), "잘못된 소설 번호"
 
-        if no_string.startswith("EP"):
-            ep_num = int(no_string.lstrip("EP."))
-            info_dic["위치"]["화수"] = ep_num
+    # 조회수 추출
+    view_cnts: list = get_ep_view_cnts(novel_code, [ep_code])
 
-        else:
-            info_dic["위치"]["화수"] = 'BONUS'
+    if len(view_cnts) == 1 and view_cnts != [-1]:
+        info_dic["통계"]["조회수"] = view_cnts[0]
 
-        # 각종 수치 추출
-        stat_tag: Tag = stats.select("span")[1]
+    def flatten(tag: Tag) -> int:
+        return int(tag.next.strip().replace(",", ""))
 
-        # 회차 번호 추출
-        # <span class="episode_count_view novel_count_view_7146">0</span>
-        view_tag: Tag = stat_tag.select_one(".episode_count_view")
+    def extract_stat(cls_sel: str) -> int | None:
+        stat_tag: Tag = stats_tag.select_one("i." + cls_sel)
 
-        # ("episode_count_view", "novel_count_view_7146")
-        class_li: str | Iterable[str] = view_tag.attrs['class']
-        ep_code: str = class_li[1].lstrip("novel_count_view_")
-        info_dic["위치"]["번호"] = ep_code
+        if stat_tag is not None:
+            return flatten(stat_tag)
 
-        assert isinstance(int(ep_code), int), "잘못된 회차 번호"
+        stat_type: str = cls_sel.lstrip("ion-")
+        stat_name: str | None = None
 
-        # 소설 번호 추출
-        page_link_tag: Tag = list_soup.select_one(".page-link")
-        onclick: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
-        s_index: int = onclick.find("page")
-        e_index: int = onclick.find("]")
-        novel_code: str = onclick[s_index + 5: e_index - 1]
+        if stat_type.startswith("doc"):
+            stat_name = "글자 수"
+        elif stat_type.startswith("chat"):
+            stat_name = "댓글 수"
+        elif stat_type.startswith("thumb"):
+            stat_name = "추천 수"
 
-        assert isinstance(int(novel_code), int), "잘못된 소설 번호"
+        if stat_name is None:
+            stat_name = "선택한 수치"
 
-        # 조회수 추출
-        url: str = "https://novelpia.com/proc/novel"
-        form_data: dict = {
-            "cmd": "get_episode_count_view",
-            "episode_arr[]": f"episode_count_view {class_li[1]}",
-            "novel_no": novel_code,
-        }
-        headers: dict = {
-            "User-Agent": ua,
-            "Content-Type":
-            "application/x-www-form-urlencoded; charset=UTF-8"
-        }
-        res = req.post(url, form_data, headers=headers)
+        print_under_new_line(stat_name + "를 찾지 못했어요")
 
-        view_counts: list[dict] = json.loads(res.text)["list"]
-        view_count: int | None = None
-        view_s: str = "-1"
+        return None
 
-        for dic in view_counts:
-            if dic["episode_no"] == int(ep_code):
-                view_s = dic["count_view"].replace(",", "")
+    info_dic["통계"]["글자 수"] = extract_stat("ion-document-text")
+    """
+    노벨피아 글자 수 기준은 공백 문자 및 일부 문장 부호 제외.
+    공지 참고: https://novelpia.com/faq/all/view_383218/
+    """
+    info_dic["통계"]["댓글 수"] = extract_stat("ion-chatbox-working")
+    info_dic["통계"]["추천 수"] = extract_stat("ion-thumbsup")
 
-        if view_count is not None:
-            info_dic["통계"]["조회수"] = int(view_s)
-
-        def flatten(tag: Tag) -> int:
-            return int(tag.next.strip().replace(",", ""))
-
-        letter_cnt_tag: Tag = stat_tag.select_one("i.ion-document-text")
-        letter_cnt: int = flatten(letter_cnt_tag)
-        """
-        노벨피아 글자수 기준은 공백 문자 및 일부 문장 부호 제외.
-        공지 참고: https://novelpia.com/faq/all/view_383218/
-        """
-        info_dic["통계"]["글자수"] = letter_cnt
-
-        chat_tag: Tag = stat_tag.select_one("i.ion-chatbox-working")
-        if chat_tag is not None:
-            comments: int = flatten(chat_tag)
-            info_dic["통계"]["댓글수"] = comments
-
-        thumb_tag: Tag = stat_tag.select_one("i.ion-thumbsup")
-        if thumb_tag is not None:
-            thumbs_up: int = flatten(thumb_tag)
-            info_dic["통계"]["추천수"] = thumbs_up
-
-        return info_dic
+    return info_dic
 
 
 def has_prologue(novel_code: str) -> bool:
@@ -405,11 +442,12 @@ def has_prologue(novel_code: str) -> bool:
     """
 
     """
-    에필로그 기능은 노벨피아에서 2022년 5월 16일 부로 삭제함.
-    공지 참고: https://novelpia.com/notice/all/view_1274648/
+    - '프롤로그' 카테고리로 등록된 회차는 EP.0으로 표시
+    - 에필로그 기능은 노벨피아에서 2022년 5월 16일 부로 삭제함.
+    - 공지 참고: https://novelpia.com/notice/all/view_1274648/
     """
 
-    ep_list_html: str = get_ep_list(novel_code)
+    ep_list_html: str = get_ep_list(novel_code, login=True)
     info_dic: dict = extract_ep_info(ep_list_html)
     ep_num: int = info_dic["위치"]["화수"]
 
