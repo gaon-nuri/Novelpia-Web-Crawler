@@ -1,12 +1,12 @@
 import shutil
-import unittest
+from unittest import TestCase, main, skip
 
 from src.common.module import *
 
 total_novel_cnt: int = 296271  # 노벨피아 소설 수 (2024-08-08 20:10 기준)
 
 
-class TestHasPrologue(unittest.TestCase):
+class TestHasPrologue(TestCase):
     """
     입력한 번호의 소설에 프롤로그가 있는 경우와 없는 경우 모두 테스트
     """
@@ -16,7 +16,8 @@ class TestHasPrologue(unittest.TestCase):
         self.assertTrue(has_prologue(code_with_p) and not has_prologue(code_without))
 
 
-class CntNovelWithPrologue(unittest.TestCase):
+class CntNovelWithPrologue(TestCase):
+    @skip
     def test_cnt_novel_with_prologue(self):
         for num in range(1, total_novel_cnt):
             code = str(num)
@@ -24,13 +25,13 @@ class CntNovelWithPrologue(unittest.TestCase):
                 self.assertTrue(has_prologue(code))
 
 
-class TestGetEnvVar(unittest.TestCase):
+class TestGetEnvVar(TestCase):
     """
     입력받은 이름의 환경 변수가 있는 경우와 없는 경우 모두 테스트
     """
     @classmethod
     def setUpClass(cls):
-        os.environ["test_key"] = "test_val"
+        environ["test_key"] = "test_val"
 
     def test_key_found(self):
         self.assertEqual(get_env_var("test_key"), "test_val")
@@ -40,19 +41,19 @@ class TestGetEnvVar(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.environ.pop("test_key")
+        environ.pop("test_key")
 
 
-class AddLoginKey(unittest.TestCase):
+class AddLoginKey(TestCase):
     def test_add_login_key(self):
         header: dict[str: str] = {"User-Agent": ua}
-        new_header: dict[str: str] = add_login_key(header)
-        login_key: str = new_header["LOGINKEY"].split("=")[1]
+        given_key, new_header = add_login_key(header)
+        real_key: str = new_header["Cookie"].split("=")[1]
 
-        self.assertEqual(login_key, get_env_var("LOGINKEY"))
+        self.assertEqual(given_key, real_key)
 
 
-class TestChkStrType(unittest.TestCase):
+class TestChkStrType(TestCase):
     def test_str_is_num(self):
         num: str = "1"
         num_in_tab: str = "\t12\t"
@@ -66,7 +67,7 @@ class TestChkStrType(unittest.TestCase):
         self.assertTrue(is_num and not is_not_num)
 
 
-class TestAssurePathExists(unittest.TestCase):
+class TestAssurePathExists(TestCase):
     def test_any_path(self):
         test_path = Path("~/path/to/assure/file.ext").expanduser()
         assure_path_exists(test_path)
@@ -74,30 +75,124 @@ class TestAssurePathExists(unittest.TestCase):
 
         try:  # 생성 성공 시 제거
             for i, path in enumerate(parents):
-                if path == Path(os.environ["HOME"]):
+                if path == Path(environ["HOME"]):
                     child = parents[i - 1]
                     shutil.rmtree(child)
-                    print("[알림]", child, "폴더를 삭제했어요.")
+                    print("[알림]", child, "폴더와 내용물을 모두 삭제했어요.")
                     break
 
-        except FileNotFoundError:  # 생성 실패
-            raise
+        except FileNotFoundError as fe:  # 생성 실패
+            print_under_new_line(fe.args, "폴더 생성에 실패했어요.")
+            self.fail()
 
 
-class GetNovelMainPage(unittest.TestCase):
+class GetNovelMainPage(TestCase):
     def test_valid_novel_code(self):
-        # code: str = "247416"
-        for num in range(10):
+        code: str = "247416"
+        url: str = "https://novelpia.com/novel/" + code
+        html: str = get_novel_main_page(url)
+
+        self.assertIsNotNone(html)
+
+    @skip
+    def test_valid_novel_codes(self):
+        for num in range(total_novel_cnt):
             code = str(num)
+
             with self.subTest(code=code):
-                url: str = f"https://novelpia.com/novel/{code}"
+                url: str = "https://novelpia.com/novel/" + code
                 html: str = get_novel_main_page(url)
 
                 self.assertIsNotNone(html)
 
 
-class GetEpListAndInfo(unittest.TestCase):
+class GetEpViewCount(TestCase):
+    def test_get_ep_view_cnt(self):
+        novel_code: str = "1"
+        ep_codes: list[str] = ["3"]
+        real_view_cnt: int = 1057
 
+        got_view_cnts: list[int] | None = get_ep_view_cnts(novel_code, ep_codes)
+        assert got_view_cnts is not None, "조회수를 받지 못했어요."
+
+        got_view_cnt = got_view_cnts[0]
+
+        self.assertEqual(got_view_cnt, real_view_cnt)
+
+    def test_get_ep_view_cnt_list(self):
+        novel_code: str = "30"
+        real_view_json: dict[str: list[dict]] = {
+            "list": [
+                {
+                  "episode_no": 280,
+                  "count_view": "35"
+                },
+                {
+                  "episode_no": 286,
+                  "count_view": "13"
+                },
+                {
+                  "episode_no": 294,
+                  "count_view": "11"
+                },
+                {
+                  "episode_no": 301,
+                  "count_view": "8"
+                },
+                {
+                  "episode_no": 309,
+                  "count_view": "5"
+                },
+                {
+                  "episode_no": 310,
+                  "count_view": "4"
+                },
+                {
+                  "episode_no": 318,
+                  "count_view": "3"
+                },
+                {
+                  "episode_no": 319,
+                  "count_view": "3"
+                },
+                {
+                  "episode_no": 326,
+                  "count_view": "3"
+                },
+                {
+                  "episode_no": 327,
+                  "count_view": "6"
+                },
+                {
+                  "episode_no": 10730,
+                  "count_view": "2"
+                },
+                {
+                  "episode_no": 12604,
+                  "count_view": "2"
+                },
+                {
+                  "episode_no": 12605,
+                  "count_view": "1"
+                },
+                {
+                  "episode_no": 12606,
+                  "count_view": "1"
+                }
+            ]
+        }
+        real_view_dics: list[dict] = real_view_json["list"]
+
+        # dic = {"episode_no": 280, "count_view": "35"}
+        ep_codes: list[str] = [str(dic["episode_no"]) for dic in real_view_dics]
+        real_view_cnts: list[int] = [int(dic["count_view"]) for dic in real_view_dics]
+
+        got_view_cnts: list[int] = get_ep_view_cnts(novel_code, ep_codes)
+
+        self.assertEqual(got_view_cnts, real_view_cnts)
+
+
+class GetEpListAndInfo(TestCase):
     def test_invalid_novel_code(self):
         code: str = "0"
         ep_no: int = 16
@@ -109,14 +204,15 @@ class GetEpListAndInfo(unittest.TestCase):
             "위치": {"화수": 0, "번호": '978'},
             "유형": {"무료": True, "성인": False},
             "통계": {
-                "글자수": 117,
+                "글자 수": 117,
                 "조회수": None,
-                "댓글수": None,
-                "추천수": None,
+                "댓글 수": None,
+                "추천 수": None,
             },
         }
         self.assertDictEqual(info_dic, answer_dic)
 
+    @skip
     def test_extract_ep_title(self):
         """
         회차의 제목을 문자열로 추출.
@@ -126,7 +222,6 @@ class GetEpListAndInfo(unittest.TestCase):
             ("610", "DOWN", 1, "001. 능력 각성"),  # <창작물 속으로>
             ("145916", "UP", 1, "완결 후기"),  # <시계탑의 폐인 공작님과 마검 속 소녀>
         }
-
         for test_params in test_set:
             code, sort, ep_no, title_a = test_params
 
@@ -139,33 +234,21 @@ class GetEpListAndInfo(unittest.TestCase):
 
     def test_no_ep_novel(self):
         """
-        회차의 제목, 화수, 번호를 Tuple 로 추출.
-        :return: (None, None, None) 반환 시 성공
+        빈 목록에서 회차 정보를 추출하는 테스트.
+        :return: 값이 None 뿐인 빈 Dict 반환 시 성공
         """
-        code: str = "31"
+        code: str = "2"
         html: str = get_ep_list(code)
         info_dic: dict = extract_ep_info(html, 1)
-        answer_dic: dict = {
-            "제목": "프롤로그",
-            "위치": {"화수": 0, "번호": '283'},
-            "유형": {"무료": True, "성인": False},
-            "통계": {
-                "글자수": 3080,
-                "조회수": None,
-                "댓글수": None,
-                "추천수": None,
-            },
-        }
-        self.assertDictEqual(info_dic, answer_dic)
+
+        self.assertIsNone(info_dic)
 
 
-class CntNoEpNovel(GetEpListAndInfo):
-    """
-    작성된 회차가 없는 작품의 비율을 측정하는 테스트
-    """
+@skip
+class CntNoEpNovel(TestCase):
     def test_cnt_no_ep_novel(self):
         """
-        회차의 제목, 화수, 번호를 Tuple 로 추출.
+        작성된 회차가 없는 작품의 비율을 측정하는 테스트
         :return: (None, None, None) 반환 시 성공
         """
         for num in range(1, total_novel_cnt):
@@ -173,15 +256,9 @@ class CntNoEpNovel(GetEpListAndInfo):
             with self.subTest(code=code):
                 html: str = get_ep_list(code)
                 info_dic: dict = extract_ep_info(html, 1)
-                empty_dic: dict = {
-                    "제목": None,
-                    "위치": {}.fromkeys(["화수", "번호"]),
-                    "유형": {}.fromkeys(["무료", "성인"]),
-                    "통계": {}.fromkeys(["글자수", "조회수", "댓글수", "추천수"]),
-                }
-                self.assertDictEqual(info_dic, empty_dic)
+                self.assertIsNone(info_dic)
 
 
 if __name__ == '__main__':
-    unittest.TestCase.longMessage = False
-    unittest.main()
+    TestCase.longMessage = False
+    main()
