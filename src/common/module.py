@@ -1,20 +1,15 @@
-from json import JSONDecodeError, loads
-from os import environ
 from pathlib import Path
-from time import ctime
-from typing import Iterable  # Type Hint: str | Iterable[str]
-
-import requests as req
-from bs4 import BeautifulSoup
-from bs4.element import ResultSet, Tag
 
 # Windows Chrome User-Agent String
 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
 
 
 def print_under_new_line(*msg: object) -> None:
-    """
-    빈 줄을 찍고 입력받은 문자열(들)을 출력하는 함수
+    """빈 줄을 찍고 입력받은 문자열(들)을 출력하는 함수
+
+    >>> print_under_new_line("Hello, World.")
+    <BLANKLINE>
+    Hello, World.
 
     :param msg: 출력할 문자열(들)
     """
@@ -23,14 +18,14 @@ def print_under_new_line(*msg: object) -> None:
 
 
 def get_env_var(key: str) -> str | None:
-    """
-    입력받은 이름의 환경 변수를 찾아서 값을 반환하는 함수
+    """입력받은 이름의 환경 변수를 찾아서 값을 반환하는 함수
 
     :param key: 이름
     :return: 값
     """
     # 환경 변수 有, 반환
     try:
+        from os import environ
         return environ[key]
 
     # 환경 변수 無, 빈 문자열 반환
@@ -41,8 +36,7 @@ def get_env_var(key: str) -> str | None:
 
 
 def add_login_key(headers: dict[str: str]) -> (str, dict):
-    """
-    입력받은 헤더에 로그인 키를 추가해서 반환하는 함수
+    """입력받은 헤더에 로그인 키를 추가해서 반환하는 함수
 
     :param headers: 로그인 키를 추가할 헤더
     :return: 추가한 로그인 키, 새 헤더
@@ -60,8 +54,7 @@ def add_login_key(headers: dict[str: str]) -> (str, dict):
 
 
 def ask_for_num(num_type: str) -> int:
-    """
-    유효한 번호를 얻을 때까지 입력을 받는 함수
+    """유효한 번호를 얻을 때까지 입력을 받는 함수
 
     :param num_type: 번호 유형
     :return: 번호 (자연수)
@@ -77,8 +70,7 @@ def ask_for_num(num_type: str) -> int:
 
 
 def chk_str_type(in_str: str, check_type: type = str) -> bool:
-    """
-    문자열의 형식을 검사하는 함수
+    """문자열의 형식을 검사하는 함수
 
     :param in_str: 형식을 검사할 문자열
     :param check_type: 문자열에 기대하는 형식
@@ -101,8 +93,7 @@ def chk_str_type(in_str: str, check_type: type = str) -> bool:
 
 
 def ask_for_str(prompt: str = "입력", type: type = str) -> str:
-    """
-    문자열을 입력받고, 그 형식이 유효하면 반환하는 함수
+    """문자열을 입력받고, 그 형식이 유효하면 반환하는 함수
 
     :param prompt: 문자열을 입력하라는 메시지
     :param type: 입력받을 문자열이 뜻하는 타입
@@ -128,8 +119,7 @@ def ask_for_str(prompt: str = "입력", type: type = str) -> str:
 
 
 def ask_for_permission(question: str, condition: bool = True) -> (bool, bool):
-    """
-    사용자의 의사를 묻고 동의 여부를 출력하는 함수
+    """사용자의 의사를 묻고 동의 여부를 출력하는 함수
 
     :param question: 사용자에게 물어볼 질문
     :param condition: 질문 여부를 결정하는 진리값
@@ -147,8 +137,7 @@ def ask_for_permission(question: str, condition: bool = True) -> (bool, bool):
 
 
 def assure_path_exists(path_to_assure: Path) -> None:
-    """
-    파일/폴더의 상위 폴더가 다 있으면 넘어가고 없으면 만드는 함수.
+    """파일/폴더의 상위 폴더가 다 있으면 넘어가고 없으면 만드는 함수.
 
     :param path_to_assure: 상위 폴더를 확보할 파일/폴더의 경로
     """
@@ -172,20 +161,21 @@ def assure_path_exists(path_to_assure: Path) -> None:
 
 
 def get_novel_main_page(url: str) -> str | None:
-    """
-    서버에 소설의 메인 페이지를 요청하고, HTML 응답을 반환하는 함수
+    """서버에 소설의 메인 페이지를 요청하고, HTML 응답을 반환하는 함수
 
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
     headers: dict = {'User-Agent': ua}
+    from requests.exceptions import ConnectionError
 
     try:
+        from requests import get
         # 소설 메인 페이지의 HTML 문서를 요청
-        res = req.get(url=url, headers=headers)  # res: <Response [200]>
+        res = get(url=url, headers=headers)  # res: <Response [200]>
 
     # 접속 실패
-    except req.exceptions.ConnectionError as ce:
+    except ConnectionError as ce:
         err_msg: str = ce.args[0].args[0]
         index: int = err_msg.find("Failed")
         print_under_new_line(err_msg[index:-42])
@@ -206,6 +196,7 @@ def open_file_if_none(file_name: Path) -> None:
 
     # 기존 파일 有
     if is_old_file_exist:
+        from time import ctime
         mtime: str = ctime(file_name.stat().st_mtime)
         question: str = f"[확인] {mtime} 에 수정된 파일이 있어요. 덮어 쓸까요?"
 
@@ -226,9 +217,8 @@ def open_file_if_none(file_name: Path) -> None:
         print_under_new_line("[알림]", file_name, "에 새로 만들었어요.")
 
 
-def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = True) -> str:
-    """
-    서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
+def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = False) -> str:
+    """서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
 
     :param code: 소설 번호
     :param sort: "DOWN", 첫화부터 / "UP", 최신화부터
@@ -245,15 +235,15 @@ def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = True
     if login:
         login_key, headers = add_login_key(headers)
 
-    res = req.post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
+    from requests import post
+    res = post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
 
     html: str = res.text
     return html
 
 
 def get_ep_view_cnts(novel_code: str, ep_codes: list[str]) -> list[int] | None:
-    """
-    입력받은 소설의 회차들의 조회수를 응답받아 반환하는 함수
+    """입력받은 소설의 회차들의 조회수를 응답받아 반환하는 함수
 
     :param novel_code: 회차가 속한 소설 번호
     :param ep_codes: 조회수를 받아올 회차들의 번호
@@ -273,8 +263,8 @@ def get_ep_view_cnts(novel_code: str, ep_codes: list[str]) -> list[int] | None:
     for i, code in enumerate(ep_codes):
         form_data["episode_arr[]"][i] += code
 
-    login_key, login_headers = add_login_key(headers)
-    res = req.post(url, form_data, headers=login_headers)
+    from requests import post
+    res = post(url, form_data, headers=headers)
 
     view_cnt_json = res.text
     """{
@@ -285,7 +275,10 @@ def get_ep_view_cnts(novel_code: str, ep_codes: list[str]) -> list[int] | None:
     }"""
 
     # 응답에서 회차별 조회수 목록을 추출
+    from json import JSONDecodeError
+
     try:
+        from json import loads
         view_cnt_dics: list[dict] = loads(view_cnt_json)["list"]
 
     # 잘못된 요청 URL, 작업(cmd), 헤더
@@ -307,14 +300,16 @@ def get_ep_view_cnts(novel_code: str, ep_codes: list[str]) -> list[int] | None:
 
 
 def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
-    """
-    목록에 적힌 회차의 각종 정보를 추출하여 반환하는 함수
+    """목록에 적힌 회차의 각종 정보를 추출하여 반환하는 함수
 
     :param list_html: 회차 목록 HTML
     :param ep_no: 추출할 회차의 목록 내 서수 (1부터 20까지)
     :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천 수
     """
+    from bs4 import BeautifulSoup
     list_soup = BeautifulSoup(list_html, "html.parser")
+
+    from bs4.element import ResultSet, Tag
     list_set: ResultSet[Tag] = list_soup.select("tr.ep_style5")
 
     info_dic: dict = {
@@ -341,6 +336,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
 
     # 유형 추출
     span_tags: ResultSet[Tag] = headline.select(".s_inv")  # <span class="b_free s_inv">무료</span>
+    from typing import Iterable  # Type Hint: str | Iterable[str]
     class_s: str | Iterable[str] = span_tags[0].attrs['class']  # ['b_free', 's_inv']
 
     if 'b_free' in class_s:
@@ -434,8 +430,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
 
 
 def has_prologue(novel_code: str) -> bool:
-    """
-    소설의 회차 목록에서 프롤로그의 유무를 반환하는 함수.
+    """소설의 회차 목록에서 프롤로그의 유무를 반환하는 함수.
 
     :param novel_code: 확인할 소설 번호
     :return: 프롤로그 유무 (참/거짓)
@@ -447,8 +442,13 @@ def has_prologue(novel_code: str) -> bool:
     - 공지 참고: https://novelpia.com/notice/all/view_1274648/
     """
 
-    ep_list_html: str = get_ep_list(novel_code, login=True)
-    info_dic: dict = extract_ep_info(ep_list_html)
+    ep_list_html: str = get_ep_list(novel_code, "DOWN", 1, login=False)
+    info_dic: dict = extract_ep_info(ep_list_html, 1)
     ep_num: int = info_dic["위치"]["화수"]
 
     return ep_num == 0
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
