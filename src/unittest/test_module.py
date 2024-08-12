@@ -1,4 +1,5 @@
 import shutil
+from os import environ
 from unittest import TestCase, main, skip
 
 from src.common.module import *
@@ -108,9 +109,9 @@ class GetNovelMainPage(TestCase):
 
 class GetEpViewCount(TestCase):
     def test_get_ep_view_cnt(self):
-        novel_code: str = "1"
-        ep_codes: list[str] = ["3"]
-        real_view_cnt: int = 1057
+        novel_code: str = "30"
+        ep_codes: list[str] = ["309"]
+        real_view_cnt: int = 5
 
         got_view_cnts: list[int] | None = get_ep_view_cnts(novel_code, ep_codes)
         assert got_view_cnts is not None, "조회수를 받지 못했어요."
@@ -260,5 +261,4 @@ class CntNoEpNovel(TestCase):
 
 
 if __name__ == '__main__':
-    TestCase.longMessage = False
     main()
