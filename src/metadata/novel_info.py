@@ -1,4 +1,5 @@
-from src.common.module import *
+from src.common.module import Path
+from src.common.userIO import print_under_new_line
 
 
 def get_postposition(kr_word: str, postposition: str) -> str:
@@ -8,26 +9,19 @@ def get_postposition(kr_word: str, postposition: str) -> str:
     :param postposition: 원래 조사
     :return: 모음 - True / 모음 외 나머지 - False
     """
-
-    # (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00
-    # 참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
-
+    ends_with_vowel: bool = ((ord(kr_word[-1]) - 0xAC00) % 28 == 0)
+    """
+    한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
+    참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
+    """
     v_post: tuple = ("가", "를", "는", "야")
     c_post: tuple = ("이", "을", "은", "아")
-    # post_dic = dict(zip(vowel_post, consonant_post))
-
-    ends_with_vowel: bool = ((ord(kr_word[-1]) - 0xAC00) % 28 == 0)
 
     for v, c in zip(v_post, c_post):
-        if postposition == v:
-            if not ends_with_vowel:
-                return c
-            return v
-        elif postposition == c:
+        if postposition in (v, c):
             if ends_with_vowel:
                 return v
-            else:
-                return c
+            return c
 
 
 def extract_alert_msg(soup, title: str) -> str | None:
@@ -66,37 +60,18 @@ def extract_alert_msg(soup, title: str) -> str | None:
     return msg
 
 
-def get_ep_up_date(novel_code: str, sort: str = "DOWN") -> str | None:
-    """소설의 회차 목록에서 첫/마지막 회차 게시일을 추출하여 반환하는 함수
+def get_novel_up_dates(code: str) -> (str, str):
+    from src.common.episode import extract_ep_tags, get_ep_up_dates, get_ep_list
+    fst_pg_li_html: str = get_ep_list(code, "DOWN")
+    lst_pg_li_html: str = get_ep_list(code, "UP")
 
-    :param novel_code: 소설 번호
-    :param sort: "DOWN", 첫화부터 / "UP", 최신화부터
-    :return: 첫/마지막 회차 게시일. 작성된 회차가 없으면 None
-    """
-    list_html = get_ep_list(novel_code, sort, 1)
     from bs4 import BeautifulSoup
-    list_soup = BeautifulSoup(list_html, "html.parser")
+    fst_pg_li_soup = BeautifulSoup(fst_pg_li_html, "html.parser")
+    lst_pg_li_soup = BeautifulSoup(lst_pg_li_html, "html.parser")
 
-    # 회차 목록 표 추출
-    list_table = list_soup.table
-
-    # 작성된 회차 無
-    if list_table is None:
-        return None
-
-    # 작성된 회차 有
-    ep_list = list_table.select_one("tr.ep_style5")
-
-    # ['무료', '프롤로그', 'EP.0', '0', '0', '2', '21.01.18']
-    ep_info: list[str] = ep_list.text.split()
-    up_date: str = ep_info[-1]  # 21.01.18 또는 '19시간전'
-
-    # 24시간 이내에 게시된 경우 당일 날짜로 간주
-    if up_date.endswith("전"):  # upload_date: '19시간전'
-        from datetime import date
-        up_date = str(date.today())  # 2024-07-25
-    else:
-        up_date = ("20" + up_date).replace(".", "-")  # 21.01.18 > 2021-01-18
+    fst_ep_tag = extract_ep_tags(fst_pg_li_soup, {1})[0]
+    lst_ep_tag = extract_ep_tags(lst_pg_li_soup, {1})[0]
+    up_date: str | None = get_ep_up_dates({fst_ep_tag, lst_ep_tag})
 
     return up_date
 
@@ -108,9 +83,9 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
     :return: 소설 제목, 추출한 Metadata 가 담긴 Dict
     """
     info_dic: dict[str] = {}.fromkeys(["작가명", "소설 링크", "인생픽 순위", "tags", "줄거리", "공개 일자", "갱신 일자", "완독 일자"])
-    info_dic["연재 상태"]: dict = {}.fromkeys(["완결", "삭제", "연재지연", "연재중단"], False)
+    info_dic["연재 상태"]: dict = {}.fromkeys(["완결", "연재지연", "연재중단", "삭제", "연습작품"], False)
     info_dic["연재 유형"]: dict = {}.fromkeys(["19", "자유", "독점", "챌린지"], False)
-    info_dic["독자 비례 지표"]: dict = {}.fromkeys(["회차 수", "알람 수", "선호 수"])
+    info_dic["독자 수 비례 지표"]: dict = {}.fromkeys(["회차 수", "알람 수", "선호 수"])
     info_dic["회차 수 비례 지표"]: dict = {}.fromkeys(["추천 수", "조회 수"])
     info_dic["연재 상태"]["연재 중"] = True
 
@@ -147,9 +122,14 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
         if alert_msg.endswith("삭제된 소설 입니다."):
             info_dic["연재 상태"]["삭제"] = True
 
+        if alert_msg.endswith("잘못된 접근입니다."):
+            info_dic["연재 상태"]["연습작품"] = True
+
         # 오류 메시지 출력
         exit_code = f"[노벨피아] {alert_msg}"
         print_under_new_line(exit_code)
+
+        info_dic["연재 상태"]["연재 중"] = False
 
         return html_title, info_dic
 
@@ -170,11 +150,9 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
         if flag in info_dic["연재 유형"].keys():  # ["19", "자유", "독점", "챌린지"]
             info_dic["연재 유형"][flag] = True
 
-        elif flag in info_dic["연재 상태"].keys():  # ["연재 중", "삭제", "완결", "연재지연", "연재중단"]
+        elif flag in info_dic["연재 상태"].keys():  # ["연재 중", "삭제", "완결", "연재지연", "연재중단"] (flag 는 "연재 중"일 수 X)
             info_dic["연재 상태"][flag] = True
-
-            if flag == "연재지연" or "연재중단":
-                info_dic["연재 상태"]["연재 중"] = False
+            info_dic["연재 상태"]["연재 중"] = False
 
     # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
     tag_set = soup.select("p.writer-tag span.tag")
@@ -214,17 +192,22 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
     elif sole_pick_rank == "공개전":
         pass
 
-    # 회차, 알람, 선호수 추출
+    # 선호/알람/회차 수 추출
     novel_stats: list = [i.string.replace(",", "") for i in soup.select("span.writer-name")]
-    novel_stats[2] = novel_stats[2].removesuffix("회차")  # 2538회차 > 2538
-    novel_stats = list(map(int, novel_stats))[::-1]
+    novel_stats[2] = novel_stats[2].removesuffix("회차")  # 239회차 > 239
+    novel_stats = list(map(int, novel_stats))  # [7694, 879, 239]
 
-    info_dic["독자 비례 지표"] = dict(zip(info_dic["독자 비례 지표"].keys(), novel_stats))
+    keys = info_dic["독자 수 비례 지표"].keys()  # dict_keys(['회차 수', '알람 수', '선호 수'])
+    novel_stats = novel_stats[::-1]  # [239, 879, 7694]
+
+    # 회차/선호/알람 수 저장
+    info_dic["독자 수 비례 지표"].update(zip(keys, novel_stats))
 
     # 프롤로그 존재 시 회차 수 1 가산
     # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
+    from src.common.episode import has_prologue
     if has_prologue(novel_code):
-        info_dic["독자 비례 지표"]["회차 수"] += 1
+        novel_stats[2] += 1
 
     # 줄거리 추출
     synopsis: str = soup.select_one(".synopsis").text
@@ -242,9 +225,8 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
     info_dic["줄거리"] = summary_callout
 
     # 작성된 회차 有, 공개 일자 추출
-    if info_dic["독자 비례 지표"]["회차 수"] != 0:
-        info_dic["공개 일자"] = get_ep_up_date(novel_code, "DOWN")
-        info_dic["갱신 일자"] = get_ep_up_date(novel_code, "UP")
+    if info_dic["독자 수 비례 지표"]["회차 수"] != 0:
+        info_dic["공개 일자"], info_dic["갱신 일자"] = get_novel_up_dates(novel_code)
 
     return novel_title, info_dic
 
@@ -259,23 +241,28 @@ def convert_to_md(title: str, info_dic: dict) -> str:
 
     print_under_new_line("[알림]", title + ".md 파일에 '유입 경로' 속성을 추가했어요. Obsidian 으로 직접 수정해 주세요.")
 
-    # 삭제된 소설
+    # 삭제된 소설, Markdown 미작성
     if info_dic["연재 상태"]["삭제"]:
-        lines = ["---"] + lines + ["---"]
-        md_string: str = "\n".join(lines)
-        return md_string
+        return "삭제"
 
-    # 소설 서비스 상태 정상
-    # 연재 지연/중단의 경우 '연중(각)'으로 표시
-    # on_hiatus: bool = info_dic["연재 유형"]["연재지연"] or info_dic["연재 유형"]["연재중단"]
-
+    # 소설 서비스 상태 정상, Markdown 작성
     lines = ["aliases:\n  - (직접 적어 주세요)"] + lines
     lines += ["유입 경로: (직접 적어 주세요)"]
 
     for k1, v1 in info_dic.items():
         assert isinstance(k1, str)
-        if k1 == "줄거리":
+
+        # 빈 항목 건너뛰기
+        if v1 is None:
             continue
+        
+        # 줄거리는 나중에 추가
+        if k1 == "줄거리":
+            if v1 is None:
+                info_dic.pop(k1)
+            continue
+
+        # 인생픽 순위가 미공개 상태일 경우 건너뛰기
         if k1 == "인생픽 순위" and v1 is None:
             continue
 
@@ -283,8 +270,21 @@ def convert_to_md(title: str, info_dic: dict) -> str:
         if isinstance(v1, dict):
             for k2, v2 in v1.items():
                 assert isinstance(k2, str)
-                if isinstance(v2, bool) and not v2:
+
+                if v2 is None:
                     continue
+
+                if isinstance(v2, bool):
+                    # 연재 유형/상태 값이 참인 것만 추가
+                    if not v2:
+                        continue
+                        
+                    # 연재 지연/중단의 경우 '연중(각)'으로 표시
+                    if k2 == "연재지연" or k2 == "연재중단":
+                        lines += ["연중(각): True"]
+                        continue
+                    
+                # 속성 이름이 숫자인 경우 Obsidian 출력이 꼬이지 않게 따옴표 씌우기
                 if k2.isnumeric():
                     if k2 == "19":
                         k2 = "성인"
@@ -302,7 +302,10 @@ def convert_to_md(title: str, info_dic: dict) -> str:
 
     lines = ["---"] + lines
     lines += ["---"]
-    lines += [info_dic["줄거리"]]
+
+    synopsis: str = info_dic["줄거리"]
+    if synopsis is not None:
+        lines += synopsis
 
     md_string: str = "\n".join(lines) + "\n"
 
@@ -310,44 +313,50 @@ def convert_to_md(title: str, info_dic: dict) -> str:
 
 
 def novel_info_main() -> None:
+    """
+    모듈 대신 스크립트로 실행할 때 호출되는 함수.
+    """
     base_url: str = "https://novelpia.com/novel/"
-    novel_dir: Path = Path.cwd().parent / "novel"
+    novel_dir = Path(Path.cwd().parent, "novel")
     env_var_name: str = "MARKDOWN_DIR"
-
     # 환경 변수의 Markdown 폴더 경로 사용
     try:
         from os import environ
         env_md_dir: str = environ[env_var_name]
-        novel_md_dir: Path = Path(env_md_dir)
+        md_dir: Path = Path(env_md_dir)
 
     # 환경 변수 無, 기본 값으로
     except KeyError as ke:
-        novel_md_dir = novel_dir / "md"
+        md_dir = Path(novel_dir, "md")
         print_under_new_line(f"`예외 발생: {ke = }")
-        print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요. Markdown 파일은 {novel_md_dir} 에 쓸게요.")
+        print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요. Markdown 파일은 {md_dir} 에 쓸게요.")
 
-    code: str = str(ask_for_num("소설 번호"))
+    from src.common.userIO import input_num
+    code: str = str(input_num("소설 번호"))
 
     from urllib.parse import urljoin
     url: str = urljoin(base_url, code)  # https://novelpia.com/novel/1
+
+    from src.common.module import get_novel_main_page
     html: str = get_novel_main_page(url)
 
     # Metadata 추출하기
     title, info_dic = extract_novel_info(html)
 
     # ../novel/markdown/제목.md
-    novel_md_name = Path(novel_md_dir, title).with_suffix(".md")
+    md_file_name = Path(md_dir, title).with_suffix(".md")
 
     # Markdown 형식으로 변환하기
-    novel_md_content = convert_to_md(title, info_dic)
+    md_file_content = convert_to_md(title, info_dic)
 
     # Markdown 폴더 확보하기
-    assure_path_exists(novel_md_name)
+    from src.common.module import assure_path_exists
+    assure_path_exists(md_file_name)
 
     # Markdown 파일 새로 쓰기
-    with (open(novel_md_name, "w") as file):
-        file.write(novel_md_content)
-        print_under_new_line("[알림]", novel_md_name, "작성함.")
+    with (open(md_file_name, "w") as file):
+        file.write(md_file_content)
+        print_under_new_line("[알림]", md_file_name, "작성함.")
 
 
 if __name__ == "__main__":
