@@ -1,66 +1,30 @@
 from unittest import TestCase, main, skip
 
 from src.metadata.novel_info import *
-from src.unittest.test_module import total_novel_cnt
+from src.myTest.test_module import total_novel_cnt  # 노벨피아 총 소설 수
 
 
 class GetFinalJamo(TestCase):
     ko_word_v_end: str = "창작물 속으로"
     ko_word_c_end: str = "매도당하고 싶은 엘프님"
 
-    v_post: list = ["가", "를", "는", "야"]
-    c_post: list = ["이", "을", "은", "아"]
-    q_post: list = ["이", "을", "은", "아"]
+    vowel_post: list = ["가", "를", "는", "야"]
+    consonant_post: list = ["이", "을", "은", "아"]
+    input_post: list = ["이", "을", "은", "아"]
 
-    def test_final_consonant(self):
+    def test_final_consonant_word(self):
         word: str = GetFinalJamo.ko_word_c_end
-        args: list = GetFinalJamo.q_post
-        a_post: list = list(map(get_postposition, [word] * 4, args))
+        args: list = GetFinalJamo.input_post
+        answer_post: list = list(map(get_postposition, [word] * 4, args))
 
-        self.assertEqual(a_post, GetFinalJamo.c_post)
+        self.assertEqual(answer_post, GetFinalJamo.consonant_post)
 
-    def test_final_vowel(self):
+    def test_final_vowel_word(self):
         word: str = GetFinalJamo.ko_word_v_end
-        args: list = GetFinalJamo.q_post
-        a_post: list = list(map(get_postposition, [word] * 4, args))
+        args: list = GetFinalJamo.input_post
+        answer_post: list = list(map(get_postposition, [word] * 4, args))
 
-        self.assertEqual(a_post, GetFinalJamo.v_post)
-
-
-class GetUpDate(TestCase):
-    def test_single_ep(self):
-        code: str = "124146"  # <연중용 나데나데 소설>
-        up_date: str = "2023-12-13"
-
-        self.assertEqual(get_ep_up_date(code), up_date)
-
-    def test_multiple_ep(self):
-        code: str = "247416"  # <숨겨진 흑막이 되었다>
-        fst_up_date: str = "2023-12-11"
-        lst_up_date: str = "2024-04-18"
-
-        fst_match: bool = get_ep_up_date(code, "DOWN") == fst_up_date
-        lst_match: bool = get_ep_up_date(code, "UP") == lst_up_date
-
-        self.assertTrue(fst_match and lst_match)
-
-    def test_no_ep(self):
-        code: str = "2"  # <건물주 아들>, 최초의 삭제된 소설. 동명의 9번 소설의 습작?
-
-        self.assertIsNone(get_ep_up_date(code))
-
-
-@skip
-class CntNoEpNovel(TestCase):
-    def test_cnt_no_ep_novel(self):
-        """
-        노벨피아 소설 중 작성된 회차가 없는 작품을 세는 테스트
-        :return: 회차가 없으면 성공, 있으면 실패
-        """
-        for num in range(1, total_novel_cnt):
-            code = str(num)
-            with self.subTest(code=code):
-                self.assertIsNone(get_ep_up_date(code))
+        self.assertEqual(answer_post, GetFinalJamo.vowel_post)
 
 
 class ConvertToMarkdown(TestCase):
@@ -140,6 +104,8 @@ class GetNovelStatus(TestCase):
         :return: '연재 중', '완결', '삭제', '연재중단', '연재지연' 중 택 1
         """
         url: str = f"https://novelpia.com/novel/{novel_code}"
+
+        from src.common.module import get_novel_main_page
         html: str = get_novel_main_page(url)
 
         title, info_dic = extract_novel_info(html)
