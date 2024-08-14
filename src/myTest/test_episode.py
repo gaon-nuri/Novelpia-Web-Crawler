@@ -1,4 +1,4 @@
-from unittest import TestCase, skip
+from unittest import TestCase, main, skip
 
 from src.common.episode import *
 from src.myTest.test_module import total_novel_cnt  # 노벨피아 총 소설 수
@@ -8,10 +8,13 @@ class TestHasPrologue(TestCase):
     """
     입력한 번호의 소설에 프롤로그가 있는 경우와 없는 경우 모두 테스트
     """
-    def test_prologue_found(self):
+    def test_is_prologue(self):
         code_with_p: str = "145916"  # <시계탑의 페인 공작님과 마검 소녀>
+        self.assertTrue(has_prologue(code_with_p))
+
+    def test_no_prologue(self):
         code_without: str = "4"  # <숨겨진 흑막이 되었다>
-        self.assertTrue(has_prologue(code_with_p) and not has_prologue(code_without))
+        self.assertFalse(has_prologue(code_without))
 
 
 class CntNovelWithPrologue(TestCase):
@@ -33,6 +36,7 @@ class GetEpListAndInfo(TestCase):
         info_dic: dict = extract_ep_info(html, ep_no)
         answer_dic: dict = {
             "제목": "계월향의 꿈",
+            "게시 일자": ['2021-01-07'],
             "위치": {"화수": 0, "번호": ep_code},
             "유형": {"무료": True, "성인": False},
             "통계": {
@@ -53,6 +57,7 @@ class GetEpListAndInfo(TestCase):
         info_dic: dict = extract_ep_info(html, ep_no)
         answer_dic: dict = {
             "제목": "프롤로그 : 기사와 양들이 만나는 날",
+            "게시 일자": ['2020-11-18'],
             "위치": {"화수": 0, "번호": ep_code},
             "유형": {"무료": True, "성인": False},
             "통계": {
@@ -64,7 +69,6 @@ class GetEpListAndInfo(TestCase):
         }
         self.assertDictEqual(info_dic, answer_dic)
 
-    @skip
     def test_extract_ep_title(self):
         """
         회차의 제목을 문자열로 추출.
@@ -79,8 +83,12 @@ class GetEpListAndInfo(TestCase):
 
             with self.subTest(code=code, sort=sort, ep_no=ep_no, title_a=title_a):
                 html: str = get_ep_list(code, sort)
-                ep_info: dict = extract_ep_info(html, ep_no)
-                title_q = ep_info["제목"]
+
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, "html.parser")
+                ep_tags: list[Tag | None] | None = extract_ep_tags(soup, {ep_no})
+                ep_tag: Tag = ep_tags[0]
+                title_q: str = ep_tag.b.i.next
 
                 self.assertEqual(title_q, title_a)
 
@@ -111,43 +119,52 @@ class CntNoEpNovelByInfo(TestCase):
                 self.assertIsNone(info_dic)
 
 
-class GetUpDate(TestCase):
+class GetNovelUpDate(TestCase):
     @staticmethod
     def get_novel_up_date(novel_code: str, sort: str = "DOWN", ep_no: int = 1):
         from src.common.episode import extract_ep_tags, get_ep_up_dates
 
         list_html: str = get_ep_list(novel_code, sort)
+
         from bs4 import BeautifulSoup
         list_soup = BeautifulSoup(list_html, "html.parser")
-        ep_tag: Tag = extract_ep_tags(list_soup, {ep_no})[0]
-        up_date: str | None = get_ep_up_dates({ep_tag})
 
-        return up_date
+        ep_tags: list[Tag] = extract_ep_tags(list_soup, {ep_no})
+        if ep_tags is None:
+            return None
+        else:
+            ep_tag: Tag = ep_tags[0]
+
+        up_dates: list[str] | None = get_ep_up_dates({ep_tag})
+        if up_dates is None:
+            return None
+        else:
+            return up_dates[0]
 
     def test_single_ep(self):
         code: str = "124146"  # <연중용 나데나데 소설>
         up_date: str = "2023-12-13"
 
-        self.assertEqual(GetUpDate.get_novel_up_date(code), up_date)
+        self.assertEqual(GetNovelUpDate.get_novel_up_date(code), up_date)
 
     def test_multiple_ep(self):
         code: str = "247416"  # <숨겨진 흑막이 되었다>
         fst_up_date: str = "2023-12-11"
         lst_up_date: str = "2024-04-18"
 
-        fst_match: bool = (GetUpDate.get_novel_up_date(code, "DOWN") == fst_up_date)
-        lst_match: bool = (GetUpDate.get_novel_up_date(code, "UP") == lst_up_date)
+        fst_match: bool = (GetNovelUpDate.get_novel_up_date(code, "DOWN") == fst_up_date)
+        lst_match: bool = (GetNovelUpDate.get_novel_up_date(code, "UP") == lst_up_date)
 
         self.assertTrue(fst_match and lst_match)
 
     def test_no_ep(self):
         code: str = "2"  # <건물주 아들>, 최초의 삭제된 소설. 동명의 9번 소설의 습작?
 
-        self.assertIsNone(GetUpDate.get_novel_up_date(code))
+        self.assertIsNone(GetNovelUpDate.get_novel_up_date(code))
 
 
-# @skip
-class CntNoEpNovelByUpDate(GetUpDate):
+@skip
+class CntNoEpNovelByNovelUpDate(GetNovelUpDate):
     def test_cnt_no_ep_novel(self):
         """
         노벨피아 소설 중 작성된 회차가 없는 작품을 세는 테스트
@@ -156,7 +173,7 @@ class CntNoEpNovelByUpDate(GetUpDate):
         for num in range(1, 10):
             code = str(num)
             with self.subTest(code=code):
-                self.assertIsNone(GetUpDate.get_novel_up_date(code))
+                self.assertIsNone(GetNovelUpDate.get_novel_up_date(code))
 
 
 class GetEpViewCount(TestCase):
@@ -243,3 +260,7 @@ class GetEpViewCount(TestCase):
         got_view_cnts: list[int] = get_ep_view_counts(novel_code, ep_codes)
 
         self.assertEqual(got_view_cnts, real_view_cnts)
+
+
+if __name__ == "__main__":
+    main()
