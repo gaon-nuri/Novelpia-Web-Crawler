@@ -2,64 +2,6 @@ from src.common.module import Path
 from src.common.userIO import print_under_new_line
 
 
-def get_postposition(kr_word: str, postposition: str) -> str:
-    """입력받은 한글 단어의 종성에 맞는 조사의 이형태를 반환하는 함수
-
-    :param kr_word: 한글 문자열
-    :param postposition: 원래 조사
-    :return: 모음 - True / 모음 외 나머지 - False
-    """
-    ends_with_vowel: bool = ((ord(kr_word[-1]) - 0xAC00) % 28 == 0)
-    """
-    한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
-    참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
-    """
-    v_post: tuple = ("가", "를", "는", "야")
-    c_post: tuple = ("이", "을", "은", "아")
-
-    for v, c in zip(v_post, c_post):
-        if postposition in (v, c):
-            if ends_with_vowel:
-                return v
-            return c
-
-
-def extract_alert_msg(soup, title: str) -> str | None:
-    """소설 메인 페이지에서 알림 창의 오류 메시지를 추출하는 함수
-
-    :param soup: BeautifulSoup 객체
-    :param title: 소설 제목
-    :return: 오류 메시지
-    """
-    try:
-        msg_tag = soup.select_one("#alert_modal .mg-b-5")
-
-    # 알림 창이 나오지 않음
-    except AttributeError as ae:
-        print_under_new_line(f"예외 발생: {ae = }")
-
-        return None
-
-    # 알림 메시지 추출
-    msg: str = msg_tag.text
-    """
-    0: 잘못된 소설 번호 입니다. (제목, 줄거리 無)
-    2: 삭제된 소설 입니다. (제목 有, 줄거리 無)
-    200000: 잘못된 접근입니다. (제목 有, 줄거리 無)
-    - 연습등록작품은 작가만 열람이 가능
-    - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
-    """
-    if msg == "잘못된 소설 번호 입니다.":
-        pass
-    elif msg == "잘못된 접근입니다.":
-        msg = f"<{title}>에 대한 {msg}"
-    elif msg == "삭제된 소설 입니다.":
-        postposition: str = get_postposition(title, "은")
-        msg = f"<{title}>{postposition} {msg}"
-
-    return msg
-
-
 def get_novel_up_dates(code: str) -> (str, str):
     from src.common.episode import extract_ep_tags, get_ep_up_dates, get_ep_list
     fst_pg_li_html: str = get_ep_list(code, "DOWN")
@@ -71,29 +13,33 @@ def get_novel_up_dates(code: str) -> (str, str):
 
     fst_ep_tag = extract_ep_tags(fst_pg_li_soup, {1})[0]
     lst_ep_tag = extract_ep_tags(lst_pg_li_soup, {1})[0]
-    up_date: str | None = get_ep_up_dates({fst_ep_tag, lst_ep_tag})
 
-    return up_date
+    fst_up_date: str | None = get_ep_up_dates({fst_ep_tag})
+    lst_up_date: str | None = get_ep_up_dates({lst_ep_tag})
+
+    return fst_up_date, lst_up_date
 
 
-def extract_novel_info(main_page_html: str) -> (str, dict):
+def extract_novel_info(html: str) -> (str, dict):
     """입력받은 소설의 메인 페이지 HTML에서 정보를 추출하여 반환하는 함수
 
-    :param main_page_html: 소설 Metadata 를 추출할 HTML
+    :param html: 소설 Metadata 를 추출할 HTML
     :return: 소설 제목, 추출한 Metadata 가 담긴 Dict
     """
-    info_dic: dict[str] = {}.fromkeys(["작가명", "소설 링크", "인생픽 순위", "tags", "줄거리", "공개 일자", "갱신 일자", "완독 일자"])
+    info_dic: dict[str] = {}.fromkeys(["작가명", "소설 링크", "인생픽 순위", "tags", "줄거리", "공개 일자", "갱신 일자"])
+    info_dic.setdefault("완독 일자", "0000-00-00")
     info_dic["연재 상태"]: dict = {}.fromkeys(["완결", "연재지연", "연재중단", "삭제", "연습작품"], False)
+    info_dic["연재 상태"].setdefault("연재 중", True)
     info_dic["연재 유형"]: dict = {}.fromkeys(["19", "자유", "독점", "챌린지"], False)
     info_dic["독자 수 비례 지표"]: dict = {}.fromkeys(["회차 수", "알람 수", "선호 수"])
     info_dic["회차 수 비례 지표"]: dict = {}.fromkeys(["추천 수", "조회 수"])
-    info_dic["연재 상태"]["연재 중"] = True
 
     from bs4 import BeautifulSoup
-    soup = BeautifulSoup(main_page_html, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
 
     # 제목 추출
-    html_title: str = soup.title.text[22:]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
+    title_tag = soup.select_one("title")
+    html_title: str = title_tag.text[22:]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
     """
     - 브라우저 상에 제목표시줄에 페이지 위치나 소설명이 표기됨.
     - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
@@ -117,25 +63,23 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
     if novel_title_tag is None:
 
         # 오류 메시지 추출
-        alert_msg: str = extract_alert_msg(soup, html_title)
+        from src.common.module import extract_alert_msg
+        with extract_alert_msg(soup, html_title) as (alert_msg, err):
+            if err:
+                print_under_new_line("[오류] 알 수 없는 이유로 소설 정보를 추출하지 못했어요.")
 
-        if alert_msg.endswith("삭제된 소설 입니다."):
-            info_dic["연재 상태"]["삭제"] = True
+            elif alert_msg.endswith("삭제된 소설 입니다."):
+                info_dic["연재 상태"]["삭제"] = True
 
-        if alert_msg.endswith("잘못된 접근입니다."):
-            info_dic["연재 상태"]["연습작품"] = True
+            elif alert_msg.endswith("잘못된 접근입니다."):
+                info_dic["연재 상태"]["연습작품"] = True
 
-        # 오류 메시지 출력
-        exit_code = f"[노벨피아] {alert_msg}"
-        print_under_new_line(exit_code)
+            info_dic["연재 상태"]["연재 중"] = False
 
-        info_dic["연재 상태"]["연재 중"] = False
-
-        return html_title, info_dic
+            return html_title, info_dic
 
     # 서비스 상태 정상, 제목 재추출 후 비교
     novel_title: str = novel_title_tag.text
-    assert html_title == novel_title
 
     # 작가명 추출
     author: str = soup.select_one("a.writer-name").string.strip()  # '제울'
@@ -156,7 +100,6 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
 
     # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
     tag_set = soup.select("p.writer-tag span.tag")
-
     """
     - 소설 등록시 최소 2개 이상의 해시태그를 지정해야 등록, 수정이 가능.
     - 모바일/PC 페이지가 같이 들어 있어서 태그가 중복 추출됨.
@@ -165,10 +108,10 @@ def extract_novel_info(main_page_html: str) -> (str, dict):
     """
 
     # PC, 모바일 중복 해시태그 제거
-    indices: int = int(len(tag_set) / 2)  # 3
-    tags: list[str] = [i.string.lstrip("#") for i in tag_set[:indices]]  # ['판타지','현대', '하렘']
+    indices = int(len(tag_set) / 2)  # 3
+    hash_tags: list[str] = [i.string.lstrip("#") for i in tag_set[:indices]]  # ['판타지','현대', '하렘']
 
-    info_dic["tags"]: str = "".join([f"\n  - {tag.lstrip('#')}" for tag in tags])
+    info_dic["tags"]: str = "".join([f"\n  - {tag.lstrip('#')}" for tag in hash_tags])
     """
     태그의 각 줄 앞에 '-'를 붙여서 Markdown list (Obsidian 태그) 형식으로 변환
     tags:
@@ -293,8 +236,9 @@ def convert_to_md(title: str, info_dic: dict) -> str:
                 lines += [k2 + ": " + str(v2)]
         else:
             # 공개/갱신/완독 일자
-            if k1.endswith("일자") and v1 is None:
-                v1 = "0000-00-00"
+            if k1.endswith("일자"):
+                if v1 is None:
+                    v1 = "0000-00-00"
 
             if k1.isnumeric():
                 k1 = '"' + k1 + '"'
@@ -305,7 +249,7 @@ def convert_to_md(title: str, info_dic: dict) -> str:
 
     synopsis: str = info_dic["줄거리"]
     if synopsis is not None:
-        lines += synopsis
+        lines += [synopsis]
 
     md_string: str = "\n".join(lines) + "\n"
 
@@ -318,18 +262,16 @@ def novel_info_main() -> None:
     """
     base_url: str = "https://novelpia.com/novel/"
     novel_dir = Path(Path.cwd().parent, "novel")
-    env_var_name: str = "MARKDOWN_DIR"
-    # 환경 변수의 Markdown 폴더 경로 사용
-    try:
-        from os import environ
-        env_md_dir: str = environ[env_var_name]
-        md_dir: Path = Path(env_md_dir)
 
-    # 환경 변수 無, 기본 값으로
-    except KeyError as ke:
-        md_dir = Path(novel_dir, "md")
-        print_under_new_line(f"`예외 발생: {ke = }")
-        print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요. Markdown 파일은 {md_dir} 에 쓸게요.")
+    # 환경 변수의 Markdown 폴더 경로 사용
+    from src.common.module import get_env_var_error
+    with get_env_var_error("MARKDOWN_DIR") as (env_md_dir, key_err):
+        if key_err:
+            md_dir = Path(novel_dir, "md")
+        else:
+            md_dir: Path = Path(env_md_dir)
+
+    print("Markdown 파일은", md_dir, "에 쓸게요.")
 
     from src.common.userIO import input_num
     code: str = str(input_num("소설 번호"))
@@ -337,8 +279,9 @@ def novel_info_main() -> None:
     from urllib.parse import urljoin
     url: str = urljoin(base_url, code)  # https://novelpia.com/novel/1
 
-    from src.common.module import get_novel_main_page
-    html: str = get_novel_main_page(url)
+    from src.common.module import get_novel_main_error
+    with get_novel_main_error(url) as (html, connect_err):
+        assert connect_err is None, f"{connect_err = }"
 
     # Metadata 추출하기
     title, info_dic = extract_novel_info(html)
@@ -353,9 +296,10 @@ def novel_info_main() -> None:
     from src.common.module import assure_path_exists
     assure_path_exists(md_file_name)
 
-    # Markdown 파일 새로 쓰기
-    with (open(md_file_name, "w") as file):
-        file.write(md_file_content)
+    # Markdown 파일 새로 만들기
+    from src.common.module import opened_w_error
+    with opened_w_error(md_file_name, "x") as (f, err):
+        f.write(md_file_content)
         print_under_new_line("[알림]", md_file_name, "작성함.")
 
 
