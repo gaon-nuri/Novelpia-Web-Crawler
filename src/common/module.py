@@ -1,26 +1,33 @@
+from contextlib import contextmanager
+from json import JSONDecodeError, loads
 from pathlib import Path
+
+from bs4 import BeautifulSoup
 
 # Windows Chrome User-Agent String
 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
 
 
-def get_env_var(key: str) -> str | None:
-    """입력받은 이름의 환경 변수를 찾아서 값을 반환하는 함수
+@contextmanager
+def get_env_var_error(env_var_name: str) -> (str | None, Exception | None):
+    """입력받은 이름의 환경 변수를 찾고 값과 오류를 반환하는 제너레이터 함수
 
-    :param key: 이름
-    :return: 값
+    :param env_var_name: 환경 변수의 이름
+    :return: 환경 변수의 값과 오류 (각각 없으면 None)
     """
-    # 환경 변수 有, 반환
     try:
         from os import environ
-        return environ[key]
-
-    # 환경 변수 無, 빈 문자열 반환
+        env_var = environ[env_var_name]
     except KeyError as ke:
         from src.common.userIO import print_under_new_line
         print_under_new_line(f"예외 발생: {ke = }")
-        print(f"환경 변수 '{key}' 을 찾지 못했어요.")
-        return None
+        print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요.")
+
+        # 환경 변수 無, 빈 문자열 반환
+        yield None, ke
+    else:
+        # 환경 변수 有, 반환
+        yield env_var, None
 
 
 def add_login_key(headers: dict[str: str]) -> (str, dict):
@@ -29,16 +36,29 @@ def add_login_key(headers: dict[str: str]) -> (str, dict):
     :param headers: 로그인 키를 추가할 헤더
     :return: 추가한 로그인 키, 새 헤더
     """
-    login_key: str = get_env_var("LOGINKEY")
+    with get_env_var_error("LOGINKEY") as (login_key, ke):
+        if login_key is None:
+            from src.common.userIO import print_under_new_line
+            print_under_new_line("로그인 없이 진행할게요.")
+        else:
+            cookie: str = "LOGINKEY=" + login_key
+            headers["Cookie"] = cookie
 
-    # 로그인 키 유무 검사
-    assert login_key is not None, "로그인 키 無"
+        return login_key, headers
 
-    # 로그인 키 有
-    cookie: str = "LOGINKEY=" + login_key
+
+def add_npd_cookie(headers: dict[str: str]) -> (str, dict):
+    """입력받은 헤더에 일일 NPD Cookie를 추가해서 반환하는 함수
+
+    :param headers: Cookie 를 추가할 헤더
+    :return: 추가한 Cookie, 새 헤더
+    """
+    from datetime import date
+    day_str: str = date.today().strftime("%d%m1")  # 8월 15일 -> 15081
+    cookie: str = "NPD" + day_str + "=meta;"
     headers["Cookie"] = cookie
 
-    return login_key, headers
+    return cookie, headers
 
 
 def assure_path_exists(path_to_assure: Path) -> None:
@@ -65,67 +85,161 @@ def assure_path_exists(path_to_assure: Path) -> None:
             break
 
 
-def get_novel_main_page(url: str) -> str | None:
+@contextmanager
+def get_novel_main_error(url: str) -> (str | None, ConnectionError | None):
     """서버에 소설의 메인 페이지를 요청하고, HTML 응답을 반환하는 함수
 
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
     headers: dict = {'User-Agent': ua}
-    from requests.exceptions import ConnectionError
+    npd_cookie, headers = add_npd_cookie(headers)
 
+    from requests.exceptions import ConnectionError
+    from urllib3.exceptions import MaxRetryError
+
+    # 소설 메인 페이지의 HTML 문서를 요청
     try:
         from requests import get
-        # 소설 메인 페이지의 HTML 문서를 요청
         res = get(url=url, headers=headers)  # res: <Response [200]>
 
-    # 접속 실패
-    except ConnectionError as ce:
-        err_msg: str = ce.args[0].args[0]
-        index: int = err_msg.find("Failed")
+    # 연결 실패
+    except* ConnectionError as err_group:
+        ce: ConnectionError = err_group.exceptions[0]
+        mre: MaxRetryError = ce.args[0]
+        err_msg: str = mre.reason.args[0]
 
-        from src.common.userIO import print_under_new_line
-        print_under_new_line(err_msg[index:-42])
+        start_index: int = err_msg.find("Failed")
+        end_index: int = err_msg.find("Errno")
 
-        return None
+        re = RuntimeError(err_msg[start_index: end_index - 3])
+
+        yield None, re
+        # raise re from err_group
 
     # 성공
     else:
         html: str = res.text
-        assert html != "", "빈 HTML"
-        return html
+        # assert html != "", "빈 HTML"
+        yield html, None
 
 
-def open_file_if_none(file_name: Path) -> None:
-    assure_path_exists(file_name)
+def get_postposition(kr_word: str, postposition: str) -> str:
+    """입력받은 한글 단어의 종성에 맞는 조사의 이형태를 반환하는 함수
 
-    # 기존 파일 유무 확인, 있으면 갱신 여부 질문
-    is_file: bool = file_name.exists()
+    :param kr_word: 한글 문자열
+    :param postposition: 원래 조사
+    :return: 모음 - True / 모음 외 나머지 - False
+    """
+    ends_with_vowel: bool = ((ord(kr_word[-1]) - 0xAC00) % 28 == 0)
+    """
+    한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
+    참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
+    """
+    v_post: tuple = ("가", "를", "는", "야")
+    c_post: tuple = ("이", "을", "은", "아")
 
+    for v, c in zip(v_post, c_post):
+        if postposition in (v, c):
+            if ends_with_vowel:
+                return v
+            return c
+
+
+@contextmanager
+def load_json_error(res_json: str) -> (dict | None, JSONDecodeError | None):
+    try:
+        dic: dict = loads(res_json)
+
+    except JSONDecodeError as je:
+        from src.common.userIO import print_under_new_line
+        print_under_new_line("예외 발생: " + f"{je = }")
+
+        yield None, je
+
+    else:
+        yield dic, None
+
+
+@contextmanager
+def extract_alert_msg(soup: BeautifulSoup, title: str | None = None) -> (str | None, AttributeError | None):
+    """소설 메인 페이지에서 알림 창의 오류 메시지를 추출하는 함수
+
+    :param soup: BeautifulSoup 객체
+    :param title: 소설 제목
+    :return: 오류 메시지
+    """
     from src.common.userIO import print_under_new_line
+    try:
+        msg_tag = soup.select_one("#alert_modal .mg-b-5")
 
-    # 기존 파일 有
-    if is_file:
+    # 알림 창이 나오지 않음
+    except AttributeError as err:
+        print_under_new_line("예외 발생:",  f"{err = }")
+        yield None, err
+
+    # 알림 추출
+    else:
+        alert_msg: str = msg_tag.text
+        """
+        0: 잘못된 소설 번호 입니다. (제목, 줄거리 無)
+        2: 삭제된 소설 입니다. (제목 有, 줄거리 無)
+        200000: 잘못된 접근입니다. (제목 有, 줄거리 無)
+        - 연습등록작품은 작가만 열람이 가능
+        - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
+        """
+        # 오류 메시지 출력
+        print_under_new_line("[노벨피아]", alert_msg)
+
+        if alert_msg == "잘못된 소설 번호 입니다.":
+            pass
+        elif alert_msg == "잘못된 접근입니다.":
+            alert_msg = f"<{title}>에 대한 {alert_msg}"
+        elif alert_msg == "삭제된 소설 입니다.":
+            postposition: str = get_postposition(title, "은")
+            alert_msg = f"<{title}>{postposition} {alert_msg}"
+
+        yield alert_msg, None
+
+
+@contextmanager
+def opened_w_error(file_name: Path, mode="xt"):
+    assure_path_exists(file_name)
+    from src.common.userIO import print_under_new_line
+    try:
+        f = open(file_name, mode)
+
+    # mode = "x"
+    except FileExistsError as err:
         from time import ctime
         mtime: str = ctime(file_name.stat().st_mtime)
+
+        # 덮어쓸 것인지 질문
+        print_under_new_line("예외 발생:", f"{err = }")
         question: str = f"[확인] {mtime} 에 수정된 파일이 있어요. 덮어 쓸까요?"
 
-        # 사용자에게 덮어쓸 것인지 질문
         from src.common.userIO import input_permission
         asked_overwrite, can_overwrite = input_permission(question)
 
-        # 덮어쓸 경우
-        if can_overwrite:
+        # 덮어 쓰기
+        if asked_overwrite and can_overwrite:
             print_under_new_line("[알림]", file_name, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
-            print()
+            yield opened_w_error(file_name, "w")
 
-        # 기존 파일을 유지, 덮어쓰지 않고 종료
+        # 기존 파일 유지
         else:
-            exit("[알림] 기존 파일이 있으니 파일 생성은 건너 뛸게요.")
+            print_under_new_line("[알림] 기존 파일이 있으니 파일 생성은 건너 뛸게요.")
+            yield opened_w_error(file_name, "r")
 
-    # 기존 파일 無, 새로 내려받기
+    except IOError as err:
+        yield None, err
+
     else:
-        print_under_new_line("[알림]", file_name, "에 새로 만들었어요.")
+        print_under_new_line("[알림]", file_name, "을 열었어요.")
+        try:
+            yield f, None
+        finally:
+            f.close()
 
 
 if __name__ == "__main__":
