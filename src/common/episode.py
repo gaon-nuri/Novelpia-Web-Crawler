@@ -1,4 +1,4 @@
-import bs4
+from bs4 import BeautifulSoup
 from bs4.element import ResultSet, Tag
 from requests import post
 
@@ -6,7 +6,7 @@ from src.common.module import ua
 from src.common.userIO import print_under_new_line
 
 
-def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = False) -> str:
+def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = True) -> str:
     """서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
 
     :param code: 소설 번호
@@ -26,8 +26,9 @@ def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = Fals
         login_key, headers = add_login_key(headers)
 
     res = post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
+    ep_list_html: str = res.text
 
-    return res.text
+    return ep_list_html
 
 
 def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None:
@@ -38,6 +39,9 @@ def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None
     :return: 조회수 목록
     """
     ep_count: int = len(ep_codes)
+    if ep_count < 1:
+        print_under_new_line("회차를 한 개 이상 선택하세요")
+        return None
 
     url: str = "https://novelpia.com/proc/novel"
     form_data: dict = {
@@ -45,9 +49,11 @@ def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None
         "episode_arr[]": ["episode_count_view novel_count_view_"] * ep_count,
         "novel_no": novel_code,
     }
-    headers: dict = {
-        "User-Agent": ua,
-    }
+    headers: dict = {"User-Agent": ua}
+
+    from src.common.module import add_login_key
+    login_key, headers = add_login_key(headers)
+
     for i, code in enumerate(ep_codes):
         form_data["episode_arr[]"][i] += code
 
@@ -62,17 +68,14 @@ def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None
     }"""
 
     # 응답에서 회차별 조회수 목록을 추출
-    from json import JSONDecodeError
-    try:
-        from json import loads
-        view_cnt_dics: list[dict] = loads(view_cnt_json)["list"]
-
-    # 잘못된 요청 URL, 작업(cmd), 헤더
-    # JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
-    except JSONDecodeError as je:
-        print_under_new_line("예외 발생: " + f"{je = }")
-
-        return None
+    from src.common.module import load_json_error
+    with load_json_error(view_cnt_json) as (res_dic, err):
+        # 잘못된 요청 URL, 작업(cmd), 헤더
+        # JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
+        if err:
+            return None
+        else:
+            view_cnt_dics: list[dict] = res_dic["list"]
 
     view_counts: list[int] = [-1] * ep_count
 
@@ -81,18 +84,19 @@ def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None
         view_counts[i] = int(view_count.replace(",", ""))
 
     # 잘못된 요청 데이터 (ep_codes > episode_arr[], novel_code > novel_no)
-    if view_counts == [-1]:
+    if view_counts == [-1] * ep_count:
         print_under_new_line("조회수를 받지 못했어요")
-    # assert view_counts != [-1] * ep_count, "조회수를 받지 못했어요."
+        return None
 
     return view_counts
 
 
-def extract_ep_tags(list_soup: bs4.BeautifulSoup, ep_no_li: set[int]) -> list[Tag | None] | None:
+def extract_ep_tags(list_soup: BeautifulSoup, ep_no_li: set[int]) -> list[Tag | None] | None:
     list_table: Tag | None = list_soup.table  # 회차 목록 표 추출
 
     # 작성된 회차 無
     if list_table is None:
+        print_under_new_line("[노벨피아] 작성된 글을 찾을 수 없습니다.")
         return None
 
     # 회차 Tag 목록 추출
@@ -170,9 +174,14 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
     :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천 수, 게시 일자
     """
     from bs4 import BeautifulSoup
-    list_soup = BeautifulSoup(list_html, "html.parser")
+    soup = BeautifulSoup(list_html, "html.parser")
 
-    ep_tag: Tag = extract_ep_tags(list_soup, {ep_no})[0]
+    ep_tags: list[Tag | None] | None = extract_ep_tags(soup, {ep_no})
+
+    if ep_tags is None or ep_tags == [None]:
+        return None
+
+    ep_tag = ep_tags[0]
 
     # 회차 찾음
     headline: Tag = ep_tag.b  # 각종 텍스트 추출
@@ -191,7 +200,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
 
     # 예약 회차
     if span_tags is None:
-        pass
+        raise RuntimeError()
 
     from typing import Iterable  # Type Hint: str | Iterable[str]
     class_s: str | Iterable[str] = span_tags[0].attrs['class']  # ['b_free', 's_inv']
@@ -241,17 +250,17 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
     assert isinstance(int(ep_code), int), "잘못된 회차 번호"
 
     # 소설 번호 추출
-    page_link_tag: Tag = list_soup.select_one(".page-link")
+    page_link_tag: Tag = soup.select_one(".page-link")
     click: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
     novel_code: str = click[click.find("page") + 5: click.find("]") - 1]
 
     assert isinstance(int(novel_code), int), "잘못된 소설 번호"
 
     # 조회수 추출
-    view_counts: list[int] = get_ep_view_counts(novel_code, [ep_code])
+    view_counts: list[int] | None = get_ep_view_counts(novel_code, [ep_code])
 
     # 조회수 저장
-    if len(view_counts) == 1 and view_counts != [-1]:
+    if view_counts is not None:
         info_dic["통계"]["조회수"] = view_counts[0]
 
     def flatten(tag: Tag) -> int:
@@ -283,7 +292,6 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
             stat_name = "선택한 수치"
 
         print_under_new_line(stat_name + "를 찾지 못했어요")
-
         return None
 
     # 글자/댓글/추천 수 저장
@@ -313,7 +321,10 @@ def has_prologue(novel_code: str) -> bool:
     - 에필로그 기능은 노벨피아에서 2022년 5월 16일 부로 삭제함.
     - 공지 참고: https://novelpia.com/notice/all/view_1274648/
     """
-    ep_list_html: str = get_ep_list(novel_code, "DOWN", 1, login=False)
+    ep_list_html: str = get_ep_list(novel_code, "DOWN", 1)
     info_dic: dict = extract_ep_info(ep_list_html, 1)
+
+    if info_dic is None:
+        return False
 
     return info_dic["위치"]["화수"] == 0
