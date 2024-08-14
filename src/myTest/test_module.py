@@ -16,10 +16,14 @@ class TestGetEnvVar(TestCase):
         environ["test_key"] = "test_val"
 
     def test_key_found(self):
-        self.assertEqual(get_env_var("test_key"), "test_val")
+        test_key: str = "test_key"
+        with get_env_var_error(test_key) as (test_val, ke):
+            self.assertTrue(test_val == "test_val" and ke is None)
 
     def test_key_not_found(self):
-        self.assertIsNone(get_env_var("fake_key"))
+        test_key: str = "fake_key"
+        with get_env_var_error(test_key) as (test_val, ke):
+            self.assertTrue(test_val is None and isinstance(ke, KeyError))
 
     @classmethod
     def tearDownClass(cls):
@@ -56,25 +60,26 @@ class TestAssurePathExists(TestCase):
         assure_path_exists(test_path)
         parents = test_path.parents
 
-        try:  # 생성 성공 시 제거
-            for i, path in enumerate(parents):
-                if path == Path(environ["HOME"]):
-                    child = parents[i - 1]
+        for i, path in enumerate(parents):
+            if path == Path(environ["HOME"]):
+                child = parents[i - 1]
+                try:  # 생성 성공 시 제거
                     shutil.rmtree(child)
+                except FileNotFoundError as fe:  # 생성 실패
+                    from src.common.userIO import print_under_new_line
+                    print_under_new_line(fe.args, "폴더 생성에 실패했어요.")
+                    self.fail()
+                else:
                     print("[알림]", child, "폴더와 내용물을 모두 삭제했어요.")
                     break
-
-        except FileNotFoundError as fe:  # 생성 실패
-            from src.common.userIO import print_under_new_line
-            print_under_new_line(fe.args, "폴더 생성에 실패했어요.")
-            self.fail()
 
 
 class GetNovelMainPage(TestCase):
     def test_valid_novel_code(self):
         code: str = "247416"
         url: str = "https://novelpia.com/novel/" + code
-        html: str = get_novel_main_page(url)
+        with get_novel_main_error(url) as (html, connect_err):
+            assert connect_err is None, f"{connect_err = }"
 
         self.assertIsNotNone(html)
 
@@ -82,10 +87,10 @@ class GetNovelMainPage(TestCase):
     def test_valid_novel_codes(self):
         for num in range(total_novel_cnt):
             code = str(num)
-
             with self.subTest(code=code):
                 url: str = "https://novelpia.com/novel/" + code
-                html: str = get_novel_main_page(url)
+                with get_novel_main_error(url) as (html, connect_err):
+                    assert connect_err is None, f"{connect_err = }"
 
                 self.assertIsNotNone(html)
 
