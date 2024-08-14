@@ -12,17 +12,24 @@ class GetFinalJamo(TestCase):
     consonant_post: list = ["이", "을", "은", "아"]
     input_post: list = ["이", "을", "은", "아"]
 
+    from src.common.module import get_postposition
+
+    @staticmethod
+    def get_josa(kr_word: str, postposition: str):
+        return GetFinalJamo.get_postposition(kr_word, postposition)
+
     def test_final_consonant_word(self):
         word: str = GetFinalJamo.ko_word_c_end
         args: list = GetFinalJamo.input_post
-        answer_post: list = list(map(get_postposition, [word] * 4, args))
+        answer_post = list(map(self.get_josa, [word] * 4, args))
 
         self.assertEqual(answer_post, GetFinalJamo.consonant_post)
 
     def test_final_vowel_word(self):
         word: str = GetFinalJamo.ko_word_v_end
         args: list = GetFinalJamo.input_post
-        answer_post: list = list(map(get_postposition, [word] * 4, args))
+
+        answer_post = list(map(self.get_josa, [word] * 4, args))
 
         self.assertEqual(answer_post, GetFinalJamo.vowel_post)
 
@@ -41,7 +48,7 @@ class ConvertToMarkdown(TestCase):
             'tags': '\n  - 현대판타지\n  - 하렘\n  - 괴담\n  - 집착',
             '공개 일자': '2023-12-11',
             '갱신 일자': '2024-04-18',
-            '완독 일자': None,
+            '완독 일자': '0000-00-00',
             '연재 상태': {
                 '연재 중': False,
                 '완결': True,
@@ -105,8 +112,10 @@ class GetNovelStatus(TestCase):
         """
         url: str = f"https://novelpia.com/novel/{novel_code}"
 
-        from src.common.module import get_novel_main_page
-        html: str = get_novel_main_page(url)
+        from src.common.module import get_novel_main_error
+        with get_novel_main_error(url) as (html, err):
+            if err:
+                raise err
 
         title, info_dic = extract_novel_info(html)
         flag_dic: dict = info_dic["연재 상태"]
@@ -114,19 +123,29 @@ class GetNovelStatus(TestCase):
 
         return up_status
 
-    def test_get_novel_status(self):
+    def test_deleted_novel(self):
         code_deleted: str = "2"  # <건물주 아들> - 최초의 삭제작
+        status: str = self.chk_up_status(code_deleted)
+
+        self.assertEqual(status, "삭제")
+
+    def test_novel_on_hiatus(self):
         code_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
+        status: str = self.chk_up_status(code_hiatus)
+
+        self.assertEqual(status, "연재중단")
+
+    def test_completed_novel(self):
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
+        status: str = self.chk_up_status(code_completed)
+
+        self.assertEqual(status, "완결")
+
+    def test_ongoing_novel(self):
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
+        status: str = self.chk_up_status(code_ongoing)
 
-        deleted: bool = (self.chk_up_status(code_deleted) == "삭제")
-        hiatus: bool = (self.chk_up_status(code_hiatus) == "연재중단")
-        compl: bool = (self.chk_up_status(code_completed) == "완결")
-        ongoing: bool = (self.chk_up_status(code_ongoing) == "연재 중")
-
-        self.assertTrue(deleted and hiatus and compl and ongoing)
-
+        self.assertEqual(status, "연재 중")
 
 @skip
 class CntNovelInStatus(GetNovelStatus):
