@@ -72,6 +72,7 @@ def extract_novel_info(html: str) -> (str, dict):
                 info_dic["연재 상태"]["삭제"] = True
 
             elif alert_msg.endswith("잘못된 접근입니다."):
+                info_dic["연재 유형"]["자유"] = True
                 info_dic["연재 상태"]["연습작품"] = True
 
             info_dic["연재 상태"]["연재 중"] = False
