@@ -9,7 +9,7 @@ ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 
 
 @contextmanager
-def get_env_var_error(env_var_name: str) -> (str | None, Exception | None):
+def get_env_var_w_error(env_var_name: str):
     """입력받은 이름의 환경 변수를 찾고 값과 오류를 반환하는 제너레이터 함수
 
     :param env_var_name: 환경 변수의 이름
@@ -17,26 +17,23 @@ def get_env_var_error(env_var_name: str) -> (str | None, Exception | None):
     """
     try:
         from os import environ
-        env_var = environ[env_var_name]
+        env_var: str = environ[env_var_name]
     except KeyError as ke:
         from src.common.userIO import print_under_new_line
         print_under_new_line(f"예외 발생: {ke = }")
         print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요.")
-
-        # 환경 변수 無, 빈 문자열 반환
         yield None, ke
     else:
-        # 환경 변수 有, 반환
         yield env_var, None
 
 
-def add_login_key(headers: dict[str: str]) -> (str, dict):
+def add_login_key(headers: dict[str: str]) -> tuple[str, dict]:
     """입력받은 헤더에 로그인 키를 추가해서 반환하는 함수
 
     :param headers: 로그인 키를 추가할 헤더
     :return: 추가한 로그인 키, 새 헤더
     """
-    with get_env_var_error("LOGINKEY") as (login_key, ke):
+    with get_env_var_w_error("LOGINKEY") as (login_key, ke):
         if login_key is None:
             from src.common.userIO import print_under_new_line
             print_under_new_line("로그인 없이 진행할게요.")
@@ -47,7 +44,7 @@ def add_login_key(headers: dict[str: str]) -> (str, dict):
         return login_key, headers
 
 
-def add_npd_cookie(headers: dict[str: str]) -> (str, dict):
+def add_npd_cookie(headers: dict[str: str]) -> tuple[str, dict]:
     """입력받은 헤더에 일일 NPD Cookie를 추가해서 반환하는 함수
 
     :param headers: Cookie 를 추가할 헤더
@@ -86,7 +83,7 @@ def assure_path_exists(path_to_assure: Path) -> None:
 
 
 @contextmanager
-def get_novel_main_error(url: str) -> (str | None, ConnectionError | None):
+def get_novel_main_w_error(url: str):
     """서버에 소설의 메인 페이지를 요청하고, HTML 응답을 반환하는 함수
 
     :param url: 요청 URL
@@ -147,26 +144,23 @@ def get_postposition(kr_word: str, postposition: str) -> str:
 
 
 @contextmanager
-def load_json_error(res_json: str) -> (dict | None, JSONDecodeError | None):
+def load_json_w_error(res_json: str):
     try:
         dic: dict = loads(res_json)
-
     except JSONDecodeError as je:
         from src.common.userIO import print_under_new_line
         print_under_new_line("예외 발생: " + f"{je = }")
-
+        je.add_note("응답 JSON: " + res_json)
         yield None, je
-
     else:
         yield dic, None
 
 
 @contextmanager
-def extract_alert_msg(soup: BeautifulSoup, title: str | None = None) -> (str | None, AttributeError | None):
+def extract_alert_msg_w_error(soup: BeautifulSoup):
     """소설 메인 페이지에서 알림 창의 오류 메시지를 추출하는 함수
 
     :param soup: BeautifulSoup 객체
-    :param title: 소설 제목
     :return: 오류 메시지
     """
     from src.common.userIO import print_under_new_line
@@ -188,35 +182,28 @@ def extract_alert_msg(soup: BeautifulSoup, title: str | None = None) -> (str | N
         - 연습등록작품은 작가만 열람이 가능
         - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
         """
-        # 오류 메시지 출력
-        print_under_new_line("[노벨피아]", alert_msg)
-
         if alert_msg == "잘못된 소설 번호 입니다.":
             pass
-        elif alert_msg == "잘못된 접근입니다.":
-            alert_msg = f"<{title}>에 대한 {alert_msg}"
-        elif alert_msg == "삭제된 소설 입니다.":
-            postposition: str = get_postposition(title, "은")
-            alert_msg = f"<{title}>{postposition} {alert_msg}"
 
         yield alert_msg, None
 
 
 @contextmanager
-def opened_w_error(file_name: Path, mode="xt"):
+def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
+    assert mode.find("b") == -1
     assure_path_exists(file_name)
     from src.common.userIO import print_under_new_line
     try:
         f = open(file_name, mode)
 
-    # mode = "x"
+    # 기존 텍스트 파일을 "xt" 모드로 열 때
     except FileExistsError as err:
         from time import ctime
         mtime: str = ctime(file_name.stat().st_mtime)
 
         # 덮어쓸 것인지 질문
         print_under_new_line("예외 발생:", f"{err = }")
-        question: str = f"[확인] {mtime} 에 수정된 파일이 있어요. 덮어 쓸까요?"
+        question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
 
         from src.common.userIO import input_permission
         asked_overwrite, can_overwrite = input_permission(question)
@@ -224,14 +211,16 @@ def opened_w_error(file_name: Path, mode="xt"):
         # 덮어 쓰기
         if asked_overwrite and can_overwrite:
             print_under_new_line("[알림]", file_name, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
-            yield opened_w_error(file_name, "w")
+            with opened_x_error(file_name, "wt", encoding) as (f, err):
+                yield f, err
 
         # 기존 파일 유지
         else:
             print_under_new_line("[알림] 기존 파일이 있으니 파일 생성은 건너 뛸게요.")
-            yield opened_w_error(file_name, "r")
+            with opened_x_error(file_name, "rt", encoding) as (f, err):
+                yield f, err
 
-    except IOError as err:
+    except OSError as err:
         yield None, err
 
     else:
