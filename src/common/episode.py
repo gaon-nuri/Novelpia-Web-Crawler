@@ -68,8 +68,8 @@ def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None
     }"""
 
     # 응답에서 회차별 조회수 목록을 추출
-    from src.common.module import load_json_error
-    with load_json_error(view_cnt_json) as (res_dic, err):
+    from src.common.module import load_json_w_error
+    with load_json_w_error(view_cnt_json) as (res_dic, err):
         # 잘못된 요청 URL, 작업(cmd), 헤더
         # JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
         if err:
@@ -91,7 +91,7 @@ def get_ep_view_counts(novel_code: str, ep_codes: list[str]) -> list[int] | None
     return view_counts
 
 
-def extract_ep_tags(list_soup: BeautifulSoup, ep_no_li: set[int]) -> list[Tag | None] | None:
+def extract_ep_tags(list_soup: BeautifulSoup, ep_no_li: set[int]) -> set[Tag | None] | None:
     list_table: Tag | None = list_soup.table  # 회차 목록 표 추출
 
     # 작성된 회차 無
@@ -101,7 +101,7 @@ def extract_ep_tags(list_soup: BeautifulSoup, ep_no_li: set[int]) -> list[Tag | 
 
     # 회차 Tag 목록 추출
     list_set: ResultSet[Tag] = list_table.select("tr.ep_style5")
-    ep_tags: list[Tag | None] = []
+    ep_tags: set[Tag | None] = set()
 
     for ep_no in ep_no_li:
         assert ep_no > 0, "잘못된 회차 서수"
@@ -110,7 +110,8 @@ def extract_ep_tags(list_soup: BeautifulSoup, ep_no_li: set[int]) -> list[Tag | 
         except IndexError:  # 회차 못 찾음
             print_under_new_line("[오류]", str(ep_no) + "번째 회차를 찾지 못했어요.")
         else:  # 회차 찾음
-            ep_tags += [ep_tag]
+            ep_tags.add(ep_tag)
+
     return ep_tags
 
 
@@ -176,12 +177,12 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(list_html, "html.parser")
 
-    ep_tags: list[Tag | None] | None = extract_ep_tags(soup, {ep_no})
+    ep_tags: set[Tag | None] | None = extract_ep_tags(soup, {ep_no})
 
     if ep_tags is None or ep_tags == [None]:
         return None
 
-    ep_tag = ep_tags[0]
+    ep_tag = ep_tags.pop()
 
     # 회차 찾음
     headline: Tag = ep_tag.b  # 각종 텍스트 추출
@@ -189,7 +190,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
     info_dic: dict = {}.fromkeys({"제목", "게시 일자"})
     info_dic["위치"]: dict = {}.fromkeys({"화수", "번호"})
     info_dic["유형"]: dict = {}.fromkeys({"무료", "성인"}, False)
-    info_dic["통계"]: dict = {}.fromkeys({"글자 수", "조회수", "댓글 수", "추천 수"})
+    info_dic["통계"]: dict = {}.fromkeys({"댓글 수", "추천 수", "글자 수", "조회수"})
 
     # 제목 추출 및 저장
     # <i class="icon ion-bookmark" id="bookmark_978" style="display:none;"></i>계월향의 꿈
