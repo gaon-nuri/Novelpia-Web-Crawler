@@ -17,12 +17,12 @@ class TestGetEnvVar(TestCase):
 
     def test_key_found(self):
         test_key: str = "test_key"
-        with get_env_var_error(test_key) as (test_val, ke):
+        with get_env_var_w_error(test_key) as (test_val, ke):
             self.assertTrue(test_val == "test_val" and ke is None)
 
     def test_key_not_found(self):
         test_key: str = "fake_key"
-        with get_env_var_error(test_key) as (test_val, ke):
+        with get_env_var_w_error(test_key) as (test_val, ke):
             self.assertTrue(test_val is None and isinstance(ke, KeyError))
 
     @classmethod
@@ -36,7 +36,7 @@ class AddLoginKey(TestCase):
         given_key, new_header = add_login_key(header)
         real_key: str = new_header["Cookie"].split("=")[1]
 
-        self.assertEqual(given_key, real_key)
+        self.assertEqual(real_key, given_key)
 
 
 class TestChkStrType(TestCase):
@@ -78,7 +78,7 @@ class GetNovelMainPage(TestCase):
     def test_valid_novel_code(self):
         code: str = "247416"
         url: str = "https://novelpia.com/novel/" + code
-        with get_novel_main_error(url) as (html, connect_err):
+        with get_novel_main_w_error(url) as (html, connect_err):
             assert connect_err is None, f"{connect_err = }"
 
         self.assertIsNotNone(html)
@@ -89,7 +89,7 @@ class GetNovelMainPage(TestCase):
             code = str(num)
             with self.subTest(code=code):
                 url: str = "https://novelpia.com/novel/" + code
-                with get_novel_main_error(url) as (html, connect_err):
+                with get_novel_main_w_error(url) as (html, connect_err):
                     assert connect_err is None, f"{connect_err = }"
 
                 self.assertIsNotNone(html)

@@ -46,7 +46,7 @@ class GetEpListAndInfo(TestCase):
                 "추천 수": None,
             },
         }
-        self.assertDictEqual(info_dic, answer_dic)
+        self.assertDictEqual(answer_dic, info_dic)
 
     def test_deleted_valid_novel(self):
         code: str = "30"
@@ -67,7 +67,7 @@ class GetEpListAndInfo(TestCase):
                 "추천 수": 1,
             },
         }
-        self.assertDictEqual(info_dic, answer_dic)
+        self.assertDictEqual(answer_dic, info_dic)
 
     def test_extract_ep_title(self):
         """
@@ -86,11 +86,11 @@ class GetEpListAndInfo(TestCase):
 
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(html, "html.parser")
-                ep_tags: list[Tag | None] | None = extract_ep_tags(soup, {ep_no})
-                ep_tag: Tag = ep_tags[0]
+                ep_tags: set[Tag] | None = extract_ep_tags(soup, {ep_no})
+                ep_tag: Tag = ep_tags.pop()
                 title_q: str = ep_tag.b.i.next
 
-                self.assertEqual(title_q, title_a)
+                self.assertEqual(title_a, title_q)
 
     def test_no_ep_novel(self):
         """
@@ -129,11 +129,11 @@ class GetNovelUpDate(TestCase):
         from bs4 import BeautifulSoup
         list_soup = BeautifulSoup(list_html, "html.parser")
 
-        ep_tags: list[Tag] = extract_ep_tags(list_soup, {ep_no})
+        ep_tags: set[Tag] = extract_ep_tags(list_soup, {ep_no})
         if ep_tags is None:
             return None
         else:
-            ep_tag: Tag = ep_tags[0]
+            ep_tag: Tag = ep_tags.pop()
 
         up_dates: list[str] | None = get_ep_up_dates({ep_tag})
         if up_dates is None:
@@ -145,7 +145,7 @@ class GetNovelUpDate(TestCase):
         code: str = "124146"  # <연중용 나데나데 소설>
         up_date: str = "2023-12-13"
 
-        self.assertEqual(GetNovelUpDate.get_novel_up_date(code), up_date)
+        self.assertEqual(up_date, self .get_novel_up_date(code))
 
     def test_multiple_ep(self):
         code: str = "247416"  # <숨겨진 흑막이 되었다>
@@ -180,14 +180,14 @@ class GetEpViewCount(TestCase):
     def test_get_ep_view_cnt(self):
         novel_code: str = "30"
         ep_codes: list[str] = ["309"]
-        real_view_cnt: int = 5
+        real_view_count: int = 5
 
-        got_view_cnts: list[int] | None = get_ep_view_counts(novel_code, ep_codes)
-        assert got_view_cnts is not None, "조회수를 받지 못했어요."
+        got_view_counts: list[int] | None = get_ep_view_counts(novel_code, ep_codes)
+        assert got_view_counts is not None, "조회수를 받지 못했어요."
 
-        got_view_cnt = got_view_cnts[0]
+        got_view_count = got_view_counts[0]
 
-        self.assertEqual(got_view_cnt, real_view_cnt)
+        self.assertEqual(real_view_count, got_view_count)
 
     def test_get_ep_view_cnt_list(self):
         novel_code: str = "30"
@@ -253,13 +253,13 @@ class GetEpViewCount(TestCase):
         }
         real_view_dics: list[dict] = real_view_json["list"]
 
-        # dic = {"episode_no": 280, "count_view": "35"}
+        # dic: {"episode_no": 280, "count_view": "35"}
         ep_codes: list[str] = [str(dic["episode_no"]) for dic in real_view_dics]
-        real_view_cnts: list[int] = [int(dic["count_view"]) for dic in real_view_dics]
+        real_view_counts: list[int] = [int(dic["count_view"]) for dic in real_view_dics]
 
-        got_view_cnts: list[int] = get_ep_view_counts(novel_code, ep_codes)
+        got_view_counts: list[int] = get_ep_view_counts(novel_code, ep_codes)
 
-        self.assertEqual(got_view_cnts, real_view_cnts)
+        self.assertEqual(real_view_counts, got_view_counts)
 
 
 if __name__ == "__main__":
