@@ -92,7 +92,7 @@ tags:
 > 괴담, 저주, 여학생 등….
 > 집착해선 안 될 것들이 내게 집착한다
 """
-        converted_md = convert_to_md(title, info_dic)
+        converted_md = novel_info_to_md(title, info_dic)
 
         self.assertEqual(formatted_md, converted_md)
 
@@ -112,40 +112,48 @@ class GetNovelStatus(TestCase):
         """
         url: str = f"https://novelpia.com/novel/{novel_code}"
 
-        from src.common.module import get_novel_main_error
-        with get_novel_main_error(url) as (html, err):
+        from src.common.module import get_novel_main_w_error
+        with get_novel_main_w_error(url) as (html, err):
             if err:
                 raise err
 
         title, info_dic = extract_novel_info(html)
         flag_dic: dict = info_dic["연재 상태"]
-        up_status: str = [k for k, v in flag_dic.items() if v][0]
+        active_flag: list[str] = [k for k, v in flag_dic.items() if v]
+        up_status: str = active_flag[0]
 
         return up_status
+
+    def test_inaccessible_novel(self):
+        code_inaccessible: str = "28"  #
+        status: str = self.chk_up_status(code_inaccessible)
+
+        self.assertEqual("연습작품", status)
 
     def test_deleted_novel(self):
         code_deleted: str = "2"  # <건물주 아들> - 최초의 삭제작
         status: str = self.chk_up_status(code_deleted)
 
-        self.assertEqual(status, "삭제")
+        self.assertEqual("삭제", status)
 
     def test_novel_on_hiatus(self):
         code_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
         status: str = self.chk_up_status(code_hiatus)
 
-        self.assertEqual(status, "연재중단")
+        self.assertEqual("연재중단", status)
 
     def test_completed_novel(self):
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
         status: str = self.chk_up_status(code_completed)
 
-        self.assertEqual(status, "완결")
+        self.assertEqual("완결", status)
 
     def test_ongoing_novel(self):
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
         status: str = self.chk_up_status(code_ongoing)
 
-        self.assertEqual(status, "연재 중")
+        self.assertEqual("연재 중", status)
+
 
 @skip
 class CntNovelInStatus(GetNovelStatus):
