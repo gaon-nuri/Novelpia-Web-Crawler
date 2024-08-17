@@ -119,7 +119,7 @@ def get_ep_up_dates(ep_tags: set[Tag]) -> list[str | None] | None:
     """목록에서 추출한 회차 Tag 들의 Set 에서 각각의 게시 일자를 추출하여 반환하는 함수
 
     :param ep_tags: 회차 Tag 목록
-    :return: 첫/마지막 회차 게시 일자. 작성된 회차가 없으면 None
+    :return: 입력받은 회차들의 게시 일자. 작성된 회차가 없으면 None, 입력된 회차가 없으면 list[None]
     """
     if ep_tags is None:
         return None
@@ -144,21 +144,29 @@ def get_ep_up_dates(ep_tags: set[Tag]) -> list[str | None] | None:
         elif up_date_str.endswith("후"):
             from datetime import datetime
             now: datetime = datetime.now()
-            up_moment: datetime = now
 
             # 예약 회차는 공개 하루 전부터 노출
-            min_index: int = up_date_str.find("분")
-            if min_index != -1:
-                min_left = int(up_date_str[:min_index])
-                up_moment = now.replace(hour=now.minute+min_left)
+            if up_date_str[1].isnumeric():
+                end_index: int = 1
+            else:
+                end_index: int = 0
 
-            # 'N+1 시간 후'일 경우 N 시간 < 실제 잔여 시간 <= N+1 시간
-            hour_index: int = up_date_str.find("시간")
-            if hour_index != -1:
-                hour_left = int(up_date_str[:hour_index])
-                up_moment = now.replace(hour=now.hour+hour_left)
+            assert end_index != -1
 
-            up_date_str = up_moment.strftime("%Y-%m-%dT%H:%M:%S")
+            if up_date_str[end_index + 1] == "분":
+                min_left = int(up_date_str[:end_index + 1])
+                now = now.replace(minute=now.minute + min_left)
+            elif up_date_str[end_index + 1] == "시":
+                # 'N+1 시간 후'일 경우 N 시간 < 실제 잔여 시간 <= N+1 시간
+                hour_left = int(up_date_str[:end_index + 1])
+                if hour_left == 24:
+                    now = now.replace(day=now.day + 1)
+                else:
+                    now = now.replace(hour=now.hour + hour_left)
+            else:
+                raise ValueError("잘못된 예약 시간: " + up_date_str)
+
+            up_date_str = now.strftime("%Y-%m-%dT%H:%M:%S")
         else:
             up_date_str = ("20" + up_date_str).replace(".", "-")  # 21.01.18 > 2021-01-18
 
@@ -197,11 +205,23 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
     info_dic["제목"] = headline.i.next
 
     # 유형 추출
-    span_tags: ResultSet[Tag] | None = headline.select(".s_inv")  # <span class="b_free s_inv">무료</span>
+    span_tags: ResultSet[Tag] | None = headline.select("span.s_inv")  # <span class="b_free s_inv">무료</span>
 
     # 예약 회차
-    if span_tags is None:
-        raise RuntimeError()
+    if not span_tags:
+
+        # 회차 번호 추출
+        view_tag: Tag = ep_tag.select_one("td.font12")
+
+        click: str = view_tag.attrs["onclick"]  # click: "$('.loads').show();location = '/viewer/3790123';"
+        start_index: int = click.find("viewer") + 7
+        ep_code: str = click[start_index: -2]
+
+        # 회차 번호 저장
+        info_dic["위치"]["번호"] = ep_code
+
+        assert isinstance(int(ep_code), int), "잘못된 회차 번호"
+        return info_dic
 
     from typing import Iterable  # Type Hint: str | Iterable[str]
     class_s: str | Iterable[str] = span_tags[0].attrs['class']  # ['b_free', 's_inv']
@@ -288,8 +308,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1) -> dict | None:
             stat_name = "댓글 수"
         elif stat_type.startswith("thumb"):
             stat_name = "추천 수"
-
-        if stat_name is None:
+        elif stat_name is None:
             stat_name = "선택한 수치"
 
         print_under_new_line(stat_name + "를 찾지 못했어요")
