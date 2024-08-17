@@ -91,7 +91,7 @@ def extract_novel_info(html: str) -> tuple[str, dict]:
     info_dic.setdefault("완독 일자", "0000-00-00")
     info_dic["연재 상태"]: dict = {}.fromkeys(["완결", "연재지연", "연재중단", "삭제", "연습작품"], False)
     info_dic["연재 상태"].setdefault("연재 중", True)
-    info_dic["연재 유형"]: dict = {}.fromkeys(["19", "자유", "독점", "챌린지"], False)
+    info_dic["연재 유형"]: dict = {}.fromkeys(["19", "자유", "PLUS", "독점", "챌린지"], False)
     info_dic["독자 수 비례 지표"]: dict = {}.fromkeys(["회차 수", "알람 수", "선호 수"])
     info_dic["회차 수 비례 지표"]: dict = {}.fromkeys(["추천 수", "조회 수"])
 
@@ -187,7 +187,7 @@ def extract_novel_info(html: str) -> tuple[str, dict]:
         novel_stats[2] += 1
 
     # 줄거리 추출
-    synopsis: str = soup.select_one(".synopsis").text
+    synopsis: str = soup.select_one("div.synopsis").text
 
     # 줄거리의 각 줄 앞에 '>'를 붙여서 Markdown Callout 블록으로 변환
     synopsis_lines: list[str] = ["> [!TLDR] 시놉시스"]
@@ -201,10 +201,8 @@ def extract_novel_info(html: str) -> tuple[str, dict]:
 
     info_dic["줄거리"] = summary_callout
 
-    # 작성된 회차 有, 공개 일자 추출
-    if info_dic["독자 수 비례 지표"]["회차 수"] != 0:
-        info_dic["공개 일자"] = get_novel_up_dates(code, "DOWN")
-        info_dic["갱신 일자"] = get_novel_up_dates(code, "UP")
+    # 공개 일자 추출
+    info_dic["공개 일자"], info_dic["갱신 일자"] = map(get_novel_up_dates, [code] * 2, ["DOWN", "UP"])
 
     return title, info_dic
 
@@ -334,9 +332,9 @@ def novel_info_main() -> None:
     # Markdown 파일 새로 만들기
     from src.common.module import opened_x_error
     with opened_x_error(md_file_name, "x") as (f, err):
-        from io import TextIOWrapper
-        assert isinstance(f, TextIOWrapper)
-        f.write(md_file_content)
+        assert f is not None
+        print(md_file_content, file=f)
+        # f.write(md_file_content)
         print_under_new_line("[알림]", md_file_name, "작성함.")
 
 
