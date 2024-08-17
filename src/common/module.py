@@ -194,7 +194,7 @@ def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
     assure_path_exists(file_name)
     from src.common.userIO import print_under_new_line
     try:
-        f = open(file_name, mode)
+        f = open(file_name, mode, encoding='utf-8')
 
     # 기존 텍스트 파일을 "xt" 모드로 열 때
     except FileExistsError as err:
