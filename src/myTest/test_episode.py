@@ -145,7 +145,7 @@ class GetNovelUpDate(TestCase):
         code: str = "124146"  # <연중용 나데나데 소설>
         up_date: str = "2023-12-13"
 
-        self.assertEqual(up_date, self .get_novel_up_date(code))
+        self.assertEqual(up_date, self.get_novel_up_date(code))
 
     def test_multiple_ep(self):
         code: str = "247416"  # <숨겨진 흑막이 되었다>
@@ -161,6 +161,12 @@ class GetNovelUpDate(TestCase):
         code: str = "2"  # <건물주 아들>, 최초의 삭제된 소설. 동명의 9번 소설의 습작?
 
         self.assertIsNone(GetNovelUpDate.get_novel_up_date(code))
+
+    def test_scheduled_ep(self):
+        code: str = "610"
+        up_date: str = "2024-08-19T04:25:29"
+
+        self.assertEqual(up_date, self.get_novel_up_date(code))
 
 
 @skip
