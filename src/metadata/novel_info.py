@@ -3,26 +3,72 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
+from bs4.filter import SoupStrainer
 
 from src.common.module import Page
 from src.common.userIO import print_under_new_line
 
 
 class Novel(Page):
-    __slots__ = Page.__slots__ + ("_writer_name", "_rank", "_tags", "_mtime", "_status",
-                                  "_ep", "_alarm", "_prefer", "_synopsis")
+    """노벨피아 소설 정보 클래스.
 
-    def __init__(self):
-        super().__init__()
-        self._writer_name = None
-        self._rank = None
-        self._tags = "tags:"
-        self._mtime = None
-        self._status = None
-        self._ep = None
-        self._alarm = None
-        self._prefer = None
-        self._synopsis = None
+    :var _writer_name: 작가명
+    :var _rank: 인생픽 순위
+    :var _tags: 해시 태그로 된 bulleted list
+    :var _mtime: 최근 (예정) 연재일
+    :var _status: 연재 상태 (연재 중, 완결, 삭제, 연습작품, 연재지연, 연재중단 中 1)
+    :var _types: 유형
+    :var _ep: 회차 수
+    :var _alarm: 일람 수
+    :var _prefer: 선호 수
+    :var _synopsis: 줄거리로 된 Markdown Callout
+    """
+    __slots__ = Page.__slots__ + (
+                                    "_writer_name",
+                                    "_rank",
+                                    "_tags",
+                                    "_status",
+                                    "_types",
+                                    "_ep",
+                                    "_alarm",
+                                    "_prefer",
+                                    "_synopsis",
+                                  )
+
+    def __init__(self,
+                 title: str = '',
+                 code: str = '',
+                 url: str = '',
+                 ctime: str = '0000-00-00',
+                 mtime: str = '0000-00-00',
+                 got_time: str = '0000-00-00',
+                 recommend: int = -1,
+                 view: int = -1,
+                 writer_name: str = '',
+                 rank: str = '',
+                 tags: str = "tags:",
+                 status: str = '',
+                 types: tuple[str] = ('',),
+                 ep: int = -1,
+                 alarm: int = -1,
+                 prefer: int = -1,
+                 synopsis: str = ''
+                 ):
+
+        super().__init__(title, code, url, ctime, mtime, got_time, recommend, view)
+
+        self._writer_name = writer_name
+        self._rank = rank
+        self._tags = tags
+        self._status = status
+        self._types = types
+        self._ep = ep
+        self._alarm = alarm
+        self._prefer = prefer
+        self._synopsis = synopsis
+
+    def __str__(self):
+        return novel_info_to_md(self)
 
     @property
     def writer_name(self):
@@ -79,6 +125,9 @@ class Novel(Page):
     def __pick_one_from(self, key: str, val: str, vals: frozenset):
         super().pick_one_from(key, val, vals)
 
+    def __add_one_from(self, key: str, val: str, vals: frozenset):
+        return super().add_one_from(key, val, vals)
+
     def __set_signed_int(self, key: str, val: int):
         super().set_signed_int(key, val)
 
@@ -92,13 +141,13 @@ class Novel(Page):
         self.__pick_one_from("_status", status, statuses)
 
     @property
-    def type(self):
-        return self._type
+    def types(self):
+        return self._types
 
-    @type.setter
-    def type(self, type: str):
+    @types.setter
+    def types(self, type: str):
         types = frozenset(["성인", "자유", "PLUS", "독점", "챌린지"])
-        self.__pick_one_from("_type", type, types)
+        self.__add_one_from("_types", type, types)
 
     @property
     def ep(self):
@@ -147,11 +196,20 @@ class Novel(Page):
 
 
 def get_novel_up_dates(code: str, sort: str) -> str:
+    """소설의 첫/마지막 연재일을 추출하여 반환하는 함수
+
+    :param code: 소설 번호
+    :param sort: 정렬 방식
+    :return: 첫/마지막 연재일
+    """
     from src.common.episode import get_ep_list, extract_ep_tags, get_ep_up_dates
-    page_li_html: str = get_ep_list(code, sort, 1, False)
-    page_li_soup = BeautifulSoup(page_li_html, "html.parser")
-    ep_tags: list[Tag | None] = extract_ep_tags(page_li_soup, frozenset([1]))
-    ep_tag = ep_tags[0]
+
+    ep_li_html: str = get_ep_list(code, sort, 1, False)
+    page_li_soup = BeautifulSoup(ep_li_html, "html.parser", parse_only=SoupStrainer("table"))
+
+    ep_tags: set[Tag | None] = extract_ep_tags(page_li_soup, frozenset([1]))
+    ep_tag = ep_tags.pop()
+
     up_dates: list[str] | None = get_ep_up_dates(frozenset([ep_tag]))
     up_date: str = up_dates[0]
 
@@ -308,7 +366,7 @@ def extract_novel_info(html: str) -> Novel:
     novel_stats = novel_stats[::-1]  # [239, 879, 7694]
 
     # 회차/선호/알람 수 저장
-    novel.ep, novel.prefer, novel.alarm = novel_stats
+    novel.ep, novel.alarm, novel.prefer = novel_stats
 
     # 프롤로그 존재 시 회차 수 1 가산
     # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
@@ -333,9 +391,7 @@ def novel_info_to_md(novel: Novel) -> str:
     """추출한 소설 정보를 Markdown 문서로 변환하는 함수
     
     :param novel: 소설 정보가 담긴 객체
-    :type novel: Novel
     :return: Markdown 문서
-    :rtype: str
     """
     lines: list[str] = []
 
@@ -349,9 +405,17 @@ def novel_info_to_md(novel: Novel) -> str:
     lines = ["aliases:\n  - (직접 적어 주세요)"] + lines
     lines.append("유입 경로: (직접 적어 주세요)")
 
-    lines: list[str] = ["작가명: " + novel.writer_name, "소설 링크: " + novel.url, novel.tags, "연재 시작일: " + novel.ctime,
-                        "최근(예정) 연재일: " + novel.mtime, "정보 수집일: " + novel.got_time, "회차 수: " + str(novel.ep),
-                        "알람 수: " + str(novel.alarm), "선호 수: " + str(novel.prefer), "추천 수: " + str(novel.recommend),
+    lines: list[str] = ["작가명: " + novel.writer_name,
+                        "소설 링크: " + novel.url, novel.tags,
+                        "유입 경로: ",
+                        "연재 시작일: " + novel.ctime,
+                        "최근(예정) 연재일: " + novel.mtime,
+                        "완독일: ",
+                        "정보 수집일: " + novel.got_time,
+                        "회차 수: " + str(novel.ep),
+                        "알람 수: " + str(novel.alarm),
+                        "선호 수: " + str(novel.prefer),
+                        "추천 수: " + str(novel.recommend),
                         "조회 수: " + str(novel.view)]
 
     lines = ["---"] + lines
@@ -371,49 +435,47 @@ def novel_info_main() -> None:
     모듈 대신 스크립트로 실행할 때 호출되는 함수.
     """
     base_url: str = "https://novelpia.com/novel/"
-    novel_dir = Path(Path.cwd().parent, "novel")
+    novel_dir = Path(Path.cwd(), "novel")
 
     # 환경 변수의 Markdown 폴더 경로 사용
     from src.common.module import get_env_var_w_error
     with get_env_var_w_error("MARKDOWN_DIR") as (env_md_dir, key_err):
         if key_err:
-            md_dir = Path(novel_dir, "md")
+            md_dir = Path(novel_dir, "markdown")
         else:
             md_dir: Path = Path(env_md_dir)
 
-    print("Markdown 파일은", md_dir, "에 쓸게요.")
+    print_under_new_line("[알림] Markdown 파일은", md_dir, "에 쓸게요.")
 
+    # 소설 번호 입력 받기
     from src.common.userIO import input_num
     code: str = str(input_num("소설 번호"))
 
     from urllib.parse import urljoin
     url: str = urljoin(base_url, code)  # https://novelpia.com/novel/1
 
+    # 소설 페이지 응답 받기
     from src.common.module import get_novel_main_w_error
     with get_novel_main_w_error(url) as (html, err):
         if err is not None:
             print_under_new_line(f"{err = }")
 
-    # Metadata 추출하기
+    # 소설 정보 추출하기
     novel: Novel = extract_novel_info(html)
 
-    # ../novel/markdown/제목.md
+    # 기본 경로: ../novel/markdown/제목.md
     md_file_name = Path(md_dir, novel.title).with_suffix(".md")
 
     # Markdown 형식으로 변환하기
     md_file_content = novel_info_to_md(novel)
 
-    # Markdownovel_infon 폴더 확보하기
-    from src.common.module import assure_path_exists
-    assure_path_exists(md_file_name)
-
-    # Markdown 파일 새로 만들기
+    # Markdown 폴더 확보 및 새 파일 열기
     from src.common.module import opened_x_error
     with opened_x_error(md_file_name, "x") as (f, err):
         assert f is not None
-        print(md_file_content, file=f)
-        # f.write(md_file_content)
-        print_under_new_line("[알림]", md_file_name, "작성함.")
+        # print(md_file_content, file=f)
+        f.write(md_file_content)
+        print_under_new_line("[알림]", md_file_name, "파일을 작성했어요.")
 
 
 if __name__ == "__main__":
