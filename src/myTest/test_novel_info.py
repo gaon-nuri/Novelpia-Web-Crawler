@@ -1,6 +1,5 @@
 from unittest import TestCase, main, skip
 
-from src.metadata.novel_info import *
 from src.myTest.test_module import total_novel_cnt  # 노벨피아 총 소설 수
 
 
@@ -40,32 +39,25 @@ class ConvertToMarkdown(TestCase):
         소설 정보가 담긴 Dict 를 Markdown 형식의 문자열로 변환하는 테스트
         :return: Markdown 형식의 소설 정보
         """
-        title: str = '숨겨진 흑막이 되었다'
-        info_dic: dict = {
-            '작가명': '미츄리',
-            '소설 링크': 'https://novelpia.com/novel/247416',
-            '인생픽 순위': None,
-            'tags': '\n  - 현대판타지\n  - 하렘\n  - 괴담\n  - 집착',
-            '공개 일자': '2023-12-11',
-            '갱신 일자': '2024-04-18',
-            '완독 일자': '0000-00-00',
-            '연재 상태': {
-                '연재 중': False,
-                '완결': True,
-                '삭제': False,
-                '연재지연': False,
-                '연재중단': False,
-            },
-            '연재 유형': {
-                '19': False,
-                '자유': False,
-                '독점': True,
-                '챌린지': False
-            },
-            'per_user_stats': {'회차 수': 225, '알람 수': 1139, '선호 수': 14669},
-            'per_ep_stats': {'추천 수': 224039, '조회 수': 2179530},
-            '줄거리': '> [!TLDR] 시놉시스\n> 괴담, 저주, 여학생 등….\n> 집착해선 안 될 것들이 내게 집착한다',
-        }
+        from src.metadata.novel_info import Novel, novel_info_to_md
+
+        novel = Novel()
+
+        novel.title = '숨겨진 흑막이 되었다'
+        novel.writer_name = '미츄리'
+        novel.url = 'https://novelpia.com/novel/247416'
+        novel.tags = '\n  - 현대판타지\n  - 하렘\n  - 괴담\n  - 집착'
+        novel.ctime = '2023-12-11'
+        novel.mtime = '2024-04-18'
+        novel.status = '완결'
+        novel.type = '독점'
+        novel.ep = 225
+        novel.alarm = 1142
+        novel.prefer = 14616
+        novel.recommend = 224772
+        novel.view = 2189821
+        novel.synopsis = '[!TLDR] 시놉시스\n> 괴담, 저주, 여학생 등….\n> 집착해선 안 될 것들이 내게 집착한다'
+
         formatted_md: str = """---
 aliases:
   - (직접 적어 주세요)
@@ -92,7 +84,7 @@ tags:
 > 괴담, 저주, 여학생 등….
 > 집착해선 안 될 것들이 내게 집착한다
 """
-        converted_md = novel_info_to_md(title, info_dic)
+        converted_md = novel_info_to_md(novel)
 
         self.assertEqual(formatted_md, converted_md)
 
@@ -108,21 +100,20 @@ class GetNovelStatus(TestCase):
         입력받은 번호의 소설의 연재 상태를 추출하여 반환하는 함수
 
         :param novel_code: 소설 번호
-        :return: '연재 중', '완결', '삭제', '연재중단', '연재지연' 중 택 1
+        :return: '연재 중', '완결', '연습작품', '삭제', '연재중단', '연재지연' 中 택 1
         """
-        url: str = f"https://novelpia.com/novel/{novel_code}"
+        from urllib.parse import urljoin
+        url: str = urljoin("https://novelpia.com/novel/", novel_code)
 
         from src.common.module import get_novel_main_w_error
         with get_novel_main_w_error(url) as (html, err):
             if err:
                 raise err
 
-        title, info_dic = extract_novel_info(html)
-        flag_dic: dict = info_dic["연재 상태"]
-        active_flag: list[str] = [k for k, v in flag_dic.items() if v]
-        up_status: str = active_flag[0]
+        from src.metadata.novel_info import Novel, extract_novel_info
+        novel: Novel = extract_novel_info(html)
 
-        return up_status
+        return novel.status
 
     def test_inaccessible_novel(self):
         code_inaccessible: str = "28"  #

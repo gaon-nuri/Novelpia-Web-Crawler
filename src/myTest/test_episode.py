@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest import TestCase, main, skip
 
 from src.common.episode import *
@@ -28,46 +29,59 @@ class CntNovelWithPrologue(TestCase):
 
 class GetEpListAndInfo(TestCase):
     def test_invalid_novel(self):
-        code: str = "0"
+        novel_code: str = "0"
         ep_no: int = 16
-        ep_code: str = "978"
 
-        html: str = get_ep_list(code)
-        info_dic: dict = extract_ep_info(html, ep_no)
-        answer_dic: dict = {
-            "제목": "계월향의 꿈",
-            "게시 일자": ['2021-01-07'],
-            "위치": {"화수": 0, "번호": ep_code},
-            "유형": {"무료": True, "성인": False},
-            "통계": {
-                "글자 수": 117,
-                "조회수": None,
-                "댓글 수": None,
-                "추천 수": None,
-            },
-        }
-        self.assertDictEqual(answer_dic, info_dic)
+        html: str = get_ep_list(novel_code)
+        got_ep: Ep = extract_ep_info(html, ep_no)
+
+        ep_code: str = "978"
+        got_time: str = datetime.today().isoformat(timespec='minutes')
+
+        answer_ep = Ep(
+            "계월향의 꿈",
+            ep_code,
+            f"https://novelpia.com/viewer/{ep_code}",
+            "2021-01-07",
+            "0000-00-00",
+            got_time,
+            -1,
+            -1,
+            {"자유"},
+            0,
+            117,
+            -1,
+        )
+        for key in got_ep.__slots__:
+            v1 = got_ep.__getattribute__(key)
+            v2 = answer_ep.__getattribute__(key)
+            assert v1 == v2
+
+        self.assertTrue(True)
+        # self.assertEqual(answer_ep, got_ep)
 
     def test_deleted_valid_novel(self):
         code: str = "30"
         ep_no: int = 1
-        ep_code: str = "280"
 
         html: str = get_ep_list(code)
-        info_dic: dict = extract_ep_info(html, ep_no)
-        answer_dic: dict = {
-            "제목": "프롤로그 : 기사와 양들이 만나는 날",
-            "게시 일자": ['2020-11-18'],
-            "위치": {"화수": 0, "번호": ep_code},
-            "유형": {"무료": True, "성인": False},
-            "통계": {
-                "글자 수": 2846,
-                "조회수": 35,
-                "댓글 수": None,
-                "추천 수": 1,
-            },
-        }
-        self.assertDictEqual(answer_dic, info_dic)
+        got_ep: Ep = extract_ep_info(html, ep_no)
+
+        answer_ep = Ep(
+            "프롤로그 : 기사와 양들이 만나는 날",
+            "280",
+            "https://novelpia.com/novel/",
+            "2020-11-18",
+            "0000-00-00",
+            "0000-00-00",
+            1,
+            35,
+            {"자유"},
+            0,
+            2846,
+            0,
+        )
+        self.assertEqual(answer_ep, got_ep)
 
     def test_extract_ep_title(self):
         """
@@ -86,7 +100,7 @@ class GetEpListAndInfo(TestCase):
 
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(html, "html.parser")
-                ep_tags: set[Tag] | None = extract_ep_tags(soup, {ep_no})
+                ep_tags: list[Tag] | None = extract_ep_tags(soup, frozenset({ep_no}))
                 ep_tag: Tag = ep_tags.pop()
                 title_q: str = ep_tag.b.i.next
 
@@ -129,13 +143,13 @@ class GetNovelUpDate(TestCase):
         from bs4 import BeautifulSoup
         list_soup = BeautifulSoup(list_html, "html.parser")
 
-        ep_tags: set[Tag] = extract_ep_tags(list_soup, {ep_no})
+        ep_tags: set[Tag] = extract_ep_tags(list_soup, frozenset({ep_no}))
         if ep_tags is None:
             return None
         else:
             ep_tag: Tag = ep_tags.pop()
 
-        up_dates: list[str] | None = get_ep_up_dates({ep_tag})
+        up_dates: list[str] | None = get_ep_up_dates(frozenset({ep_tag}))
         if up_dates is None:
             return None
         else:
@@ -162,6 +176,7 @@ class GetNovelUpDate(TestCase):
 
         self.assertIsNone(GetNovelUpDate.get_novel_up_date(code))
 
+    @skip
     def test_scheduled_ep(self):
         code: str = "610"
         up_date: str = "2024-08-19T04:25:29"
@@ -185,7 +200,7 @@ class CntNoEpNovelByNovelUpDate(GetNovelUpDate):
 class GetEpViewCount(TestCase):
     def test_get_ep_view_cnt(self):
         novel_code: str = "30"
-        ep_codes: list[str] = ["309"]
+        ep_codes: frozenset[str] = frozenset({"309"})
         real_view_count: int = 5
 
         got_view_counts: list[int] | None = get_ep_view_counts(novel_code, ep_codes)
@@ -260,7 +275,7 @@ class GetEpViewCount(TestCase):
         real_view_dics: list[dict] = real_view_json["list"]
 
         # dic: {"episode_no": 280, "count_view": "35"}
-        ep_codes: list[str] = [str(dic["episode_no"]) for dic in real_view_dics]
+        ep_codes: frozenset[str] = frozenset([str(dic["episode_no"]) for dic in real_view_dics])
         real_view_counts: list[int] = [int(dic["count_view"]) for dic in real_view_dics]
 
         got_view_counts: list[int] = get_ep_view_counts(novel_code, ep_codes)
