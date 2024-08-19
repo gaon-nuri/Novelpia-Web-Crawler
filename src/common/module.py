@@ -1,11 +1,131 @@
 from contextlib import contextmanager
+from datetime import datetime
 from json import JSONDecodeError, loads
 from pathlib import Path
 
 from bs4 import BeautifulSoup
 
+from src.common.userIO import print_under_new_line
+
 # Windows Chrome User-Agent String
 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
+
+
+class Page:
+    __slots__ = ("_title", "_code", "_url", "_ctime", "_mtime", "_got_time", "_type", "_recommend", "_view")
+
+    def __init__(self):
+        self._title = None
+        self._code = None
+        self._url = None
+        self._ctime = None
+        self._mtime = None
+        self._got_time = None
+        self._type = None
+        self._recommend = None
+        self._view = None
+
+    def __str__(self):
+        page_info_dic: dict = {}
+        for key in self.__slots__:
+            page_info_dic[key] = self.__getattribute__(key)
+        return str(page_info_dic)
+
+    @property
+    def title(self):
+        return self._title
+
+    @title.setter
+    def title(self, title: str):
+        if title.isprintable():
+            self._title = title
+
+    @property
+    def code(self):
+        return self._code
+
+    @code.setter
+    def code(self, code: str):
+        if code.isnumeric() and int(code) > 0:
+            self._code = code
+            self._url = "https://novelpia.com/novel/" + code
+        else:
+            print_under_new_line(f"{self}.code를 {code}(으)로 바꿀 수 없어요.")
+            print("소설 번호를 자연수로 설정해 주세요.")
+
+    @property
+    def url(self):
+        return self._url
+
+    @url.setter
+    def url(self, url: str):
+        from requests import get, Response
+        res: Response = get(url, headers={"User-Agent": ua})
+        try:
+            domain: str = res.headers.get("Access-Control-Allow-Origin")
+        except KeyError as ke:
+            print_under_new_line(f"예외 발생: {ke = }")
+            print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
+        else:
+            if domain == "https://novelpia.com":
+                self._url = url
+            else:
+                print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
+
+    @property
+    def ctime(self):
+        return self._ctime
+
+    @ctime.setter
+    def ctime(self, up_date_s: str):
+        try:
+            datetime.fromisoformat(up_date_s)  # up_date_s: "2024-12-13"
+        except ValueError as err:
+            err.add_note(*err.args)
+            print_under_new_line("예외 발생: " + f"{err = }")
+            raise
+        else:
+            self._ctime = up_date_s
+
+    @property
+    def got_time(self):
+        return self._got_time
+
+    @got_time.setter
+    def got_time(self, now: datetime):
+        self._got_time = now.isoformat(timespec="minutes")
+
+    def pick_one_from(self, key: str, val: str, vals: frozenset):
+        if val in vals:
+            self.__setattr__(key, val)
+        else:
+            print_under_new_line(f"{self}.{key}를 {val}(으)로 바꿀 수 없어요.")
+            print(*vals, "중에서 선택해 주세요.")
+
+    def set_signed_int(self, key: str, val: int | None):
+        if val is None:
+            self.__setattr__(key, -1)
+        elif val >= 0:
+            self.__setattr__(key, val)
+        else:
+            print_under_new_line(f"{self}.{key}를 {val}(으)로 바꿀 수 없어요.")
+            print("0 이상의 정수로 설정해 주세요.")
+
+    @property
+    def recommend(self):
+        return self._recommend
+
+    @recommend.setter
+    def recommend(self, recommend: int):
+        self.set_signed_int("_recommend", recommend)
+
+    @property
+    def view(self):
+        return self._view
+
+    @view.setter
+    def view(self, view: int):
+        self.set_signed_int("_view", view)
 
 
 @contextmanager
@@ -19,7 +139,6 @@ def get_env_var_w_error(env_var_name: str):
         from os import environ
         env_var: str = environ[env_var_name]
     except KeyError as ke:
-        from src.common.userIO import print_under_new_line
         print_under_new_line(f"예외 발생: {ke = }")
         print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요.")
         yield None, ke
@@ -35,7 +154,6 @@ def add_login_key(headers: dict[str: str]) -> tuple[str, dict]:
     """
     with get_env_var_w_error("LOGINKEY") as (login_key, ke):
         if login_key is None:
-            from src.common.userIO import print_under_new_line
             print_under_new_line("로그인 없이 진행할게요.")
         else:
             cookie: str = "LOGINKEY=" + login_key
@@ -148,7 +266,6 @@ def load_json_w_error(res_json: str):
     try:
         dic: dict = loads(res_json)
     except JSONDecodeError as je:
-        from src.common.userIO import print_under_new_line
         print_under_new_line("예외 발생: " + f"{je = }")
         je.add_note("응답 JSON: " + res_json)
         yield None, je
@@ -163,7 +280,6 @@ def extract_alert_msg_w_error(soup: BeautifulSoup):
     :param soup: BeautifulSoup 객체
     :return: 오류 메시지
     """
-    from src.common.userIO import print_under_new_line
     try:
         msg_tag = soup.select_one("#alert_modal .mg-b-5")
 
@@ -192,17 +308,15 @@ def extract_alert_msg_w_error(soup: BeautifulSoup):
 def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
     assert mode.find("b") == -1
     assure_path_exists(file_name)
-    from src.common.userIO import print_under_new_line
     try:
         f = open(file_name, mode, encoding='utf-8')
 
     # 기존 텍스트 파일을 "xt" 모드로 열 때
-    except FileExistsError as err:
+    except FileExistsError:
         from time import ctime
         mtime: str = ctime(file_name.stat().st_mtime)
 
         # 덮어쓸 것인지 질문
-        print_under_new_line("예외 발생:", f"{err = }")
         question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
 
         from src.common.userIO import input_permission
