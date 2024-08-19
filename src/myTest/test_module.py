@@ -11,6 +11,7 @@ class TestGetEnvVar(TestCase):
     """
     입력받은 이름의 환경 변수가 있는 경우와 없는 경우 모두 테스트
     """
+
     @classmethod
     def setUpClass(cls):
         environ["test_key"] = "test_val"
