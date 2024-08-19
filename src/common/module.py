@@ -12,18 +12,47 @@ ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 
 
 class Page:
-    __slots__ = ("_title", "_code", "_url", "_ctime", "_mtime", "_got_time", "_type", "_recommend", "_view")
+    """
+    노벨피아 웹 페이지 클래스.
 
-    def __init__(self):
-        self._title = None
-        self._code = None
-        self._url = None
-        self._ctime = None
-        self._mtime = None
-        self._got_time = None
-        self._type = None
-        self._recommend = None
-        self._view = None
+    :var _title: 제목
+    :var _code: 고유 번호
+    :var _url: URL
+    :var _ctime: 공개 시각
+    :var _mtime: 갱신 시각
+    :var _got_time: 크롤링 시각
+    :var _recommend: 추천 수
+    :var _view: 조회 수
+    """
+    __slots__ = (
+        "_title",
+        "_code",
+        "_url",
+        "_ctime",
+        "_mtime",
+        "_got_time",
+        "_recommend",
+        "_view"
+    )
+
+    def __init__(self,
+                 title: str = '',
+                 code: str = '',
+                 url: str = '',
+                 ctime: str = '0000-00-00',
+                 mtime: str = '0000-00-000',
+                 got_time: str = '',
+                 recommend: int = -1,
+                 view: int = -1
+                 ):
+        self._title = title
+        self._code = code
+        self._url = url
+        self._ctime = ctime
+        self._mtime = mtime
+        self._got_time = got_time
+        self._recommend = recommend
+        self._view = view
 
     def __str__(self):
         page_info_dic: dict = {}
@@ -37,7 +66,7 @@ class Page:
 
     @title.setter
     def title(self, title: str):
-        if title.isprintable():
+        if isinstance(title, str) and title.isprintable():
             self._title = title
 
     @property
@@ -46,9 +75,9 @@ class Page:
 
     @code.setter
     def code(self, code: str):
-        if code.isnumeric() and int(code) > 0:
+        if all([isinstance(code, str), code.isnumeric(), int(code) > 0]):
             self._code = code
-            self._url = "https://novelpia.com/novel/" + code
+            # self._url = "https://novelpia.com/novel/" + code
         else:
             print_under_new_line(f"{self}.code를 {code}(으)로 바꿀 수 없어요.")
             print("소설 번호를 자연수로 설정해 주세요.")
@@ -102,7 +131,16 @@ class Page:
             print_under_new_line(f"{self}.{key}를 {val}(으)로 바꿀 수 없어요.")
             print(*vals, "중에서 선택해 주세요.")
 
-    def set_signed_int(self, key: str, val: int | None):
+    def add_one_from(self, key: str, val: str, vals: frozenset):
+        if val in vals:
+            self_value = self.__getattribute__(key)
+            assert isinstance(self_value, list)
+            self.__setattr__(key, self_value.append(val))
+        else:
+            print_under_new_line(f"{self}.{key}에 {val}(을)를 추가할 수 없어요.")
+            print(*vals, "중에서 선택해 주세요.")
+
+    def set_signed_int(self, key: str, val: int):
         if val is None:
             self.__setattr__(key, -1)
         elif val >= 0:
@@ -338,7 +376,7 @@ def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
         yield None, err
 
     else:
-        print_under_new_line("[알림]", file_name, "을 열었어요.")
+        print_under_new_line("[알림]", file_name, "파일을 열었어요.")
         try:
             yield f, None
         finally:
