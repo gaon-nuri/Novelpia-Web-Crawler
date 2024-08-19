@@ -7,30 +7,64 @@ from src.common.userIO import print_under_new_line
 
 
 class Ep(Page):
-    __slots__ = "_ctime", "_type", "_num", "_letter", "_view", "_comment", "_recommend"
+    """
+    노벨피아 회차 정보 클래스.
 
-    def __init__(self):
-        super().__init__()
-        self._ctime = None
-        self._num = None
-        self._type = None
-        self._comment = None
-        self._letter = None
+    :var _types: 유형 (자유/PLUS, 19금 여부)
+    :var _num: 화수
+    :var _letter: 글자 수
+    :var _comment: 댓글 수
+    """
+    __slots__ = Page.__slots__ + (
+                    "_types",
+                    "_num",
+                    "_letter",
+                    "_comment",
+                )
+
+    def __init__(self,
+                 title: str = '',
+                 code: str = '',
+                 url: str = '',
+                 ctime: str = '0000-00-00',
+                 mtime: str = '0000-00-00',
+                 got_time: str = '0000-00-00',
+                 recommend: int = -1,
+                 view: int = -1,
+                 types: set[str] = None,
+                 num: int = -1,
+                 letter: int = -1,
+                 comment: int = -1,
+                 ):
+
+        super().__init__(title, code, url, ctime, mtime, got_time, recommend, view)
+        if types is None:
+            types = set()
+        self._num = num
+        self._types = types
+        self._comment = comment
+        self._letter = letter
+
+    def __str__(self):
+        return ep_content_to_md(self, [])
 
     def __pick_one_from(self, key: str, val: str, vals: frozenset):
         return super().pick_one_from(key, val, vals)
+
+    def __add_one_from(self, key: str, val: str, vals: frozenset):
+        return super().add_one_from(key, val, vals)
 
     def __set_signed_int(self, key: str, val: int):
         return super().set_signed_int(key, val)
 
     @property
-    def type(self):
-        return self._type
+    def types(self):
+        return self._types
 
-    @type.setter
-    def type(self, type: str):
-        types = frozenset(["자유", "PLUS", "성인"])
-        self.__pick_one_from("_type", type, types)
+    @types.setter
+    def types(self, type: str):
+        all_types = frozenset(["자유", "PLUS", "성인"])
+        self.__add_one_from("_types", type, all_types)
 
     @property
     def num(self):
@@ -38,14 +72,18 @@ class Ep(Page):
 
     @num.setter
     def num(self, num: str):
-        # 정규 회차
-        if num.startswith("EP"):
-            num_i = int(num.lstrip("EP."))
-            self.__set_signed_int("_num", num_i)
-
-        # 보너스 회차
-        elif isinstance(num, str) and num == "BONUS":
+        if isinstance(num, int):
             self._num = num
+
+        elif isinstance(num, str):
+            # 정규 회차
+            if num.startswith("EP"):
+                num_i = int(num.lstrip("EP."))
+                self.__set_signed_int("_num", num_i)
+
+            # 보너스 회차
+            if num == "BONUS":
+                self._num = "BONUS"
 
         # 잘못된 입력
         else:
@@ -68,7 +106,7 @@ class Ep(Page):
         self.__set_signed_int("_comment", comment)
 
 
-def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = True) -> str:
+def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = False) -> str:
     """서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
 
     :param code: 소설 번호
@@ -113,9 +151,6 @@ def get_ep_view_counts(novel_code: str, ep_codes: frozenset[str]) -> list[int] |
     }
     headers: dict = {"User-Agent": ua}
 
-    from src.common.module import add_login_key
-    login_key, headers = add_login_key(headers)
-
     for i, code in enumerate(ep_codes):
         form_data["episode_arr[]"][i] += code
 
@@ -153,7 +188,7 @@ def get_ep_view_counts(novel_code: str, ep_codes: frozenset[str]) -> list[int] |
     return view_counts
 
 
-def extract_ep_tags(list_soup: BeautifulSoup, ep_num_queue: frozenset[int]):
+def extract_ep_tags(list_soup: BeautifulSoup, ep_num_queue: frozenset[int]) -> set[Tag] | None:
     """입력받은 회차 목록에서 선택한 회차들의 태그를 추출하여 하나씩 반환하는 제너레이터 함수
 
     :param list_soup: 회차 목록
@@ -170,7 +205,7 @@ def extract_ep_tags(list_soup: BeautifulSoup, ep_num_queue: frozenset[int]):
     # 회차 Tag 목록 추출
     list_set: ResultSet[Tag] = list_table.select("tr.ep_style5")
 
-    ep_tags: list[Tag] = []
+    ep_tags: set[Tag] = set()
 
     for ep_num in ep_num_queue:
         assert ep_num > 0, "잘못된 회차 서수"
@@ -179,7 +214,7 @@ def extract_ep_tags(list_soup: BeautifulSoup, ep_num_queue: frozenset[int]):
         except IndexError:  # 회차 못 찾음
             print_under_new_line("[오류]", str(ep_num) + "번째 회차를 찾지 못했어요.")
         else:  # 회차 찾음
-            ep_tags.append(ep_tag)
+            ep_tags.add(ep_tag)
 
     return ep_tags
 
@@ -280,7 +315,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     if ep_tags is None or ep_tags == [None]:
         return None
 
-    ep_tag: Tag = ep_tags[0]
+    ep_tag: Tag = ep_tags.pop()
 
     # 회차 찾음
     # Ep 클래스 객체 생성
@@ -313,10 +348,10 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
 
     # 유형 저장
     if 'b_free' in types:
-        ep.type = "자유"
+        ep.types.add("자유")
 
     if 'b_19' in types:
-        ep.type = "성인"
+        ep.types.add("성인")
 
     # 각종 정보 추출
     stats: Tag = ep_tag.select_one("div.ep_style2 font")
@@ -343,16 +378,22 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     types: str | Iterable[str] = view_tag.attrs['class']
     ep_code: str = types[1].lstrip("novel_count_view_")
 
-    # 회차 번호 저장
+    # 회차 번호 및 URL 저장
     ep.code = ep_code
 
-    assert isinstance(int(ep_code), int), "잘못된 회차 번호"
+    from urllib.parse import urljoin
+    ep.url = urljoin("https://novelpia.com/viewer/", ep_code)
+
+    # 게시/크롤링 일자 추출 및 저장
+    ep.ctime = get_ep_up_dates(frozenset({ep_tag}))[0]
+
+    from datetime import datetime
+    ep.got_time = datetime.today()
 
     # 소설 번호 추출
     page_link_tag: Tag = soup.select_one(".page-link")
     click: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
     novel_code: str = click[click.find("page") + 5: click.find("]") - 1]
-
     assert isinstance(int(novel_code), int), "잘못된 소설 번호"
 
     # 조회수 추출
@@ -400,9 +441,6 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     """
     ep.comment = extract_stat("ion-chatbox-working")
     ep.recommend = extract_stat("ion-thumbsup")
-
-    # 게시 일자 추출 및 저장
-    ep.ctime = get_ep_up_dates(frozenset({ep_tag}))[0]
 
     return ep
 
