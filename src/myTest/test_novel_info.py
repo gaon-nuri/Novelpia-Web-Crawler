@@ -46,17 +46,17 @@ class ConvertToMarkdown(TestCase):
         novel.title = '숨겨진 흑막이 되었다'
         novel.writer_name = '미츄리'
         novel.url = 'https://novelpia.com/novel/247416'
-        novel.tags = '\n  - 현대판타지\n  - 하렘\n  - 괴담\n  - 집착'
+        novel.tags = ['현대판타지', '하렘', '괴담', '집착']
         novel.ctime = '2023-12-11'
         novel.mtime = '2024-04-18'
         novel.status = '완결'
-        novel.type = '독점'
+        novel.types.add('독점')
         novel.ep = 225
         novel.alarm = 1142
         novel.prefer = 14616
         novel.recommend = 224772
         novel.view = 2189821
-        novel.synopsis = '[!TLDR] 시놉시스\n> 괴담, 저주, 여학생 등….\n> 집착해선 안 될 것들이 내게 집착한다'
+        novel.synopsis = '괴담, 저주, 여학생 등….\n집착해선 안 될 것들이 내게 집착한다'
 
         formatted_md: str = """---
 aliases:
@@ -64,21 +64,20 @@ aliases:
 유입 경로: (직접 적어 주세요)
 작가명: 미츄리
 소설 링크: https://novelpia.com/novel/247416
-tags: 
+tags:
   - 현대판타지
   - 하렘
   - 괴담
   - 집착
-공개 일자: 2023-12-11
-갱신 일자: 2024-04-18
-완독 일자: 0000-00-00
-완결: True
-독점: True
+완독일: 0000-00-00
+연재 시작일: 2023-12-11
+최근(예정) 연재일: 2024-04-18
+정보 수집일: 0000-00-00
 회차 수: 225
-알람 수: 1139
-선호 수: 14669
-추천 수: 224039
-조회 수: 2179530
+알람 수: 1142
+선호 수: 14616
+추천 수: 224772
+조회 수: 2189821
 ---
 > [!TLDR] 시놉시스
 > 괴담, 저주, 여학생 등….
@@ -90,14 +89,11 @@ tags:
 
 
 class GetNovelStatus(TestCase):
-    """
-    연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트.
-    """
+    """연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트."""
 
     @staticmethod
     def chk_up_status(novel_code: str) -> str:
-        """
-        입력받은 번호의 소설의 연재 상태를 추출하여 반환하는 함수
+        """입력받은 번호의 소설의 연재 상태를 추출하여 반환하는 함수
 
         :param novel_code: 소설 번호
         :return: '연재 중', '완결', '연습작품', '삭제', '연재중단', '연재지연' 中 택 1
@@ -148,9 +144,7 @@ class GetNovelStatus(TestCase):
 
 @skip
 class CntNovelInStatus(GetNovelStatus):
-    """
-    특정 연재 상태의 소설 비율을 재는 테스트
-    """
+    """특정 연재 상태의 소설 비율을 재는 테스트"""
 
     @staticmethod
     def chk_up_status(novel_code: str):

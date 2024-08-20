@@ -1,4 +1,3 @@
-from datetime import datetime
 from unittest import TestCase, main, skip
 
 from src.common.episode import *
@@ -6,9 +5,8 @@ from src.myTest.test_module import total_novel_cnt  # 노벨피아 총 소설 �
 
 
 class TestHasPrologue(TestCase):
-    """
-    입력한 번호의 소설에 프롤로그가 있는 경우와 없는 경우 모두 테스트
-    """
+    """소설의 프롤로그 유무를 구하는 테스트"""
+
     def test_is_prologue(self):
         code_with_p: str = "145916"  # <시계탑의 페인 공작님과 마검 소녀>
         self.assertTrue(has_prologue(code_with_p))
@@ -18,9 +16,13 @@ class TestHasPrologue(TestCase):
         self.assertFalse(has_prologue(code_without))
 
 
+@skip
 class CntNovelWithPrologue(TestCase):
-    @skip
     def test_cnt_novel_with_prologue(self):
+        """프롤로그가 있는 소설의 수를 구하는 테스트 뭉치.
+
+        :return: 각각 프롤로그가 있으면 성공
+        """
         for num in range(1, total_novel_cnt):
             code = str(num)
             with self.subTest(code=code):
@@ -52,15 +54,13 @@ class GetEpListAndInfo(TestCase):
             117,
             -1,
         )
-        for key in got_ep.__slots__:
-            v1 = got_ep.__getattribute__(key)
-            v2 = answer_ep.__getattribute__(key)
-            assert v1 == v2
-
-        self.assertTrue(True)
-        # self.assertEqual(answer_ep, got_ep)
+        self.assertEqual(*map(str, [answer_ep, got_ep]))
 
     def test_deleted_valid_novel(self):
+        """삭제된 회차의 정보를 구하는 테스트
+
+        :return: 두 Ep 클래스 객체의 str 값이 같으면 성공
+        """
         code: str = "30"
         ep_no: int = 1
 
@@ -70,7 +70,7 @@ class GetEpListAndInfo(TestCase):
         answer_ep = Ep(
             "프롤로그 : 기사와 양들이 만나는 날",
             "280",
-            "https://novelpia.com/novel/",
+            "https://novelpia.com/viewer/280",
             "2020-11-18",
             "0000-00-00",
             "0000-00-00",
@@ -79,14 +79,14 @@ class GetEpListAndInfo(TestCase):
             {"자유"},
             0,
             2846,
-            0,
+            -1,
         )
-        self.assertEqual(answer_ep, got_ep)
+        self.assertEqual(*map(str, [answer_ep, got_ep]))
 
     def test_extract_ep_title(self):
-        """
-        회차의 제목을 문자열로 추출.
-        :return: 원 제목과 일치 시 성공
+        """회차의 제목을 문자열로 추출하는 테스트
+
+        :return: 추출한 제목이 원래 제목과 같으면 성공
         """
         test_set: set[tuple[str, str, int, str]] = {
             ("610", "DOWN", 1, "001. 능력 각성"),  # <창작물 속으로>
@@ -97,18 +97,15 @@ class GetEpListAndInfo(TestCase):
 
             with self.subTest(code=code, sort=sort, ep_no=ep_no, title_a=title_a):
                 html: str = get_ep_list(code, sort)
-
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(html, "html.parser")
-                ep_tags: list[Tag] | None = extract_ep_tags(soup, frozenset({ep_no}))
+                ep_tags: list[Tag] | None = extract_ep_tags(html, frozenset({ep_no}))
                 ep_tag: Tag = ep_tags.pop()
                 title_q: str = ep_tag.b.i.next
 
                 self.assertEqual(title_a, title_q)
 
     def test_no_ep_novel(self):
-        """
-        빈 목록에서 회차 정보를 추출하는 테스트.
+        """빈 목록에서 회차 정보를 추출하는 테스트.
+
         :return: 값이 None 뿐인 빈 Dict 반환 시 성공
         """
         code: str = "2"
@@ -121,8 +118,8 @@ class GetEpListAndInfo(TestCase):
 @skip
 class CntNoEpNovelByInfo(TestCase):
     def test_cnt_no_ep_novel(self):
-        """
-        작성된 회차가 없는 작품의 비율을 측정하는 테스트
+        """작성된 회차가 없는 작품의 비율을 측정하는 테스트
+
         :return: (None, None, None) 반환 시 성공
         """
         for num in range(1, 10):
@@ -134,16 +131,15 @@ class CntNoEpNovelByInfo(TestCase):
 
 
 class GetNovelUpDate(TestCase):
+    """소설의 연재 시작일과 최근 (예정) 연재일을 구하는 테스트"""
+
     @staticmethod
     def get_novel_up_date(novel_code: str, sort: str = "DOWN", ep_no: int = 1):
         from src.common.episode import extract_ep_tags, get_ep_up_dates
 
         list_html: str = get_ep_list(novel_code, sort)
+        ep_tags: list[Tag] = extract_ep_tags(list_html, frozenset({ep_no}))
 
-        from bs4 import BeautifulSoup
-        list_soup = BeautifulSoup(list_html, "html.parser")
-
-        ep_tags: set[Tag] = extract_ep_tags(list_soup, frozenset({ep_no}))
         if ep_tags is None:
             return None
         else:
@@ -199,6 +195,10 @@ class CntNoEpNovelByNovelUpDate(GetNovelUpDate):
 
 class GetEpViewCount(TestCase):
     def test_get_ep_view_cnt(self):
+        """회차의 조회 수를 추출하는 테스트
+
+        :return: 추출한 조회 수가 실제 조회수와 같으면 성공
+        """
         novel_code: str = "30"
         ep_codes: frozenset[str] = frozenset({"309"})
         real_view_count: int = 5
