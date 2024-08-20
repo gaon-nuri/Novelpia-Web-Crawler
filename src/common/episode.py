@@ -1,14 +1,16 @@
+from datetime import datetime
+
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet, Tag
+from bs4.filter import SoupStrainer
 from requests import post
 
-from src.common.module import Page, ua
+from src.common.module import Page, parser, ua
 from src.common.userIO import print_under_new_line
 
 
 class Ep(Page):
-    """
-    노벨피아 회차 정보 클래스.
+    """노벨피아 회차 정보 클래스.
 
     :var _types: 유형 (자유/PLUS, 19금 여부)
     :var _num: 화수
@@ -16,11 +18,11 @@ class Ep(Page):
     :var _comment: 댓글 수
     """
     __slots__ = Page.__slots__ + (
-                    "_types",
-                    "_num",
-                    "_letter",
-                    "_comment",
-                )
+        "_types",
+        "_num",
+        "_letter",
+        "_comment",
+    )
 
     def __init__(self,
                  title: str = '',
@@ -46,7 +48,10 @@ class Ep(Page):
         self._letter = letter
 
     def __str__(self):
-        return ep_content_to_md(self, [])
+        from typing import Generator
+
+        md_gen: Generator = ep_content_to_md(self, [])
+        return ''.join(md_gen)
 
     def __pick_one_from(self, key: str, val: str, vals: frozenset):
         return super().pick_one_from(key, val, vals)
@@ -188,33 +193,32 @@ def get_ep_view_counts(novel_code: str, ep_codes: frozenset[str]) -> list[int] |
     return view_counts
 
 
-def extract_ep_tags(list_soup: BeautifulSoup, ep_num_queue: frozenset[int]) -> set[Tag] | None:
-    """입력받은 회차 목록에서 선택한 회차들의 태그를 추출하여 하나씩 반환하는 제너레이터 함수
+def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]) -> list[Tag] | None:
+    """입력받은 회차 목록에서 선택한 회차들의 태그를 추출하여 하나씩 반환하는 함수
 
-    :param list_soup: 회차 목록
+    :param list_html: 회차 목록 HTML
     :param ep_num_queue: 태그를 추출할 회차 서수의 집합
     :return: 회차 태그의 집합
     """
-    list_table: Tag | None = list_soup.table  # 회차 목록 표 추출
+    # 회차 Tag 목록 추출
+    only_ep = SoupStrainer("tr", {"class": "ep_style5"})
+    soup = BeautifulSoup(list_html, parser, parse_only=only_ep)
 
     # 작성된 회차 無
-    if list_table is None:
+    if len(soup.contents) == 0:
         print_under_new_line("[노벨피아] 작성된 글을 찾을 수 없습니다.")
         return None
 
-    # 회차 Tag 목록 추출
-    list_set: ResultSet[Tag] = list_table.select("tr.ep_style5")
-
-    ep_tags: set[Tag] = set()
+    ep_tags: ResultSet[Tag] = soup.select("td.font12", limit=20)
 
     for ep_num in ep_num_queue:
         assert ep_num > 0, "잘못된 회차 서수"
         try:  # 입력받은 서수의 회차 검색
-            ep_tag: Tag = list_set[ep_num - 1]
+            ep_tag: Tag = ep_tags[ep_num - 1]
         except IndexError:  # 회차 못 찾음
             print_under_new_line("[오류]", str(ep_num) + "번째 회차를 찾지 못했어요.")
         else:  # 회차 찾음
-            ep_tags.add(ep_tag)
+            ep_tags.append(ep_tag)
 
     return ep_tags
 
@@ -235,10 +239,8 @@ def get_ep_up_dates(ep_tags: frozenset[Tag]) -> list[str | None] | None:
             ep_up_dates.append(None)
             continue
 
-        bold_tags: ResultSet[Tag] = ep_tag.select("b")
+        bold_tags: ResultSet[Tag] = ep_tag.select("b", limit=2)
         up_date_str: str = bold_tags[1].text.strip()  # 21.01.18 또는 '19시간전'
-
-        from datetime import datetime
 
         # 24시간 이내에 게시
         if up_date_str.endswith("전"):  # upload_date: '1시간전' / '1분전'
@@ -307,10 +309,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     :param ep_no: 추출할 회차의 목록 내 서수 (1부터 20까지)
     :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천 수, 게시 일자
     """
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(list_html, "html.parser")
-
-    ep_tags = extract_ep_tags(soup, frozenset({ep_no}))
+    ep_tags: list[Tag] = extract_ep_tags(list_html, frozenset({ep_no}))
 
     if ep_tags is None or ep_tags == [None]:
         return None
@@ -321,14 +320,15 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     # Ep 클래스 객체 생성
     ep = Ep()
 
-    headline: Tag = ep_tag.b  # 각종 텍스트 추출
+    headline: Tag = ep_tag.select_one("b")  # 각종 텍스트 추출
 
     # 제목 추출 및 저장
     # <i class="icon ion-bookmark" id="bookmark_978" style="display:none;"></i>계월향의 꿈
-    ep.title = headline.i.next
+    title: str = headline.select_one("i").next.text  # '001. 능력 각성'
+    ep.title = title
 
     # 유형 추출
-    span_tags: ResultSet[Tag] | None = headline.select("span.s_inv")  # <span class="b_free s_inv">무료</span>
+    span_tags: ResultSet[Tag] | None = headline.select("span.s_inv", limit=2)  # <span class="b_free s_inv">무료</span>
 
     # 예약 회차
     if span_tags is None:
@@ -358,21 +358,24 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
 
     # 회차 화수 표기 추출
     # stats.span: <span style="~">EP.0</span>
-    ep_no: str = stats.span.text  # 'EP.1' / 'BONUS'
+    ep_num_tag: Tag = stats.select_one("span").extract()
+    ep_num: str = ep_num_tag.text  # 'EP.1' / 'BONUS'
+    # print_under_new_line(f"제거: {ep_no_tag = }")
     """
     - 회차 목록 내 추천, 댓글 수 표기 기능이 늦게 나와서 작품 연재 시기에 따라서 회차 화수 표기의 인덱스가 다를 수 있음
     - 추천 수 추가 공지: <2021년 01월 08일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_1392/)>
     - 댓글, 추천, 조회수 표기 공지: <2021년 01월 12일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_3248/)>
     """
     # 화수 저장
-    ep.num = ep_no
+    ep.num = ep_num
 
     # 각종 수치 추출
-    stats_tag: Tag = stats.select("span")[1]
+    stats_tag: Tag = stats.span
 
     # 회차 번호 추출
     # <span class="episode_count_view novel_count_view_7146">0</span>
-    view_tag: Tag = stats_tag.select_one(".episode_count_view")
+    view_tag: Tag = stats_tag.select_one(".episode_count_view").extract()
+    # print_under_new_line(f"제거: {view_tag = }")
 
     # ("episode_count_view", "novel_count_view_7146")
     types: str | Iterable[str] = view_tag.attrs['class']
@@ -387,14 +390,15 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     # 게시/크롤링 일자 추출 및 저장
     ep.ctime = get_ep_up_dates(frozenset({ep_tag}))[0]
 
-    from datetime import datetime
     ep.got_time = datetime.today()
 
-    # 소설 번호 추출
-    page_link_tag: Tag = soup.select_one(".page-link")
+    # 소설 번호 추출r
+    only_link = SoupStrainer("div", {"class": "page-link"})
+    link_soup = BeautifulSoup(list_html, parser, parse_only=only_link)
+
+    page_link_tag: Tag = link_soup.select_one(".page-link")
     click: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
     novel_code: str = click[click.find("page") + 5: click.find("]") - 1]
-    assert isinstance(int(novel_code), int), "잘못된 소설 번호"
 
     # 조회수 추출
     view_counts: list[int] | None = get_ep_view_counts(novel_code, frozenset([ep_code]))
@@ -403,12 +407,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     if view_counts is not None:
         ep.view = view_counts[0]
 
-    def flatten(tag: Tag) -> int:
-        return int(tag.next.strip().replace(",", ""))
-
     def extract_stat(cls_sel: str) -> int | None:
-        """
-        CSS 클래스 선택자를 입력받아 수치를 추출하여 반환하는 함수
+        """CSS 클래스 선택자를 입력받아 수치를 추출하여 반환하는 함수
 
         :param cls_sel: 추출할 태그의 CSS 클래스 선택자
         :return: 추출한 수치
@@ -416,7 +416,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
         stat_tag: Tag = stats_tag.select_one("i." + cls_sel)
 
         if stat_tag is not None:
-            return flatten(stat_tag)
+            stat = int(stat_tag.next.strip().replace(",", ""))
+            return stat
 
         stat_type: str = cls_sel.lstrip("ion-")
         stat_name: str | None = None
@@ -434,14 +435,15 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
         return None
 
     # 글자/댓글/추천 수 저장
-    ep.letter = extract_stat("ion-document-text")
+    ep.letter, ep.comment, ep.recommend = map(extract_stat, [
+        "ion-document-text",  # 글자 수
+        "ion-chatbox-working",  # 댓글 수
+        "ion-thumbsup",  # 추천 수
+    ])
     """
     노벨피아 글자 수 기준은 공백 문자 및 일부 문장 부호 제외.
     공지 참고: https://novelpia.com/faq/all/view_383218/
     """
-    ep.comment = extract_stat("ion-chatbox-working")
-    ep.recommend = extract_stat("ion-thumbsup")
-
     return ep
 
 
@@ -468,12 +470,15 @@ def ep_content_to_md(ep: Ep, ep_lines: list[str]):
 
     :param ep: Ep 클래스의 객체
     :param ep_lines: 회차 본문 줄별 목록
-    :type: list[str]
-    :rtype: Generator
     """
-    property_lines: list[str] = ["공개 일자: " + ep.ctime, "회차 링크: " + ep.url, "화수: " + str(ep.num),
-                                 "댓글 수: " + str(ep.comment), "글자 수: " + str(ep.letter), "조회 수: " + str(ep.view),
-                                 "추천 수: " + str(ep.recommend)]
+    property_lines: list[str] = ["공개 일자: " + ep.ctime,
+                                 "회차 링크: " + ep.url,
+                                 "화수: " + str(ep.num),
+                                 "댓글 수: " + str(ep.comment),
+                                 "글자 수: " + str(ep.letter),
+                                 "조회 수: " + str(ep.view),
+                                 "추천 수: " + str(ep.recommend)
+                                 ]
 
     property_lines = ["---"] + property_lines
     property_lines.append("---")
@@ -488,9 +493,7 @@ def ep_content_to_html(lines: list[str]):
     """회차 제목과 본문을 입력받아 HTML 문서 제너레이터를 반환하는 함수
 
     :param lines: 회차 본문 줄 목록
-    :type: list[str]
     :return: HTML 문서를 한 줄씩 반환하는 제너레이터
-    :rtype: Generator
     """
     contents: list[str] = []
     # style_attr: str = '\"font-size: 18px; line-height: 125%; max-width: 900px; margin: 0px auto;\"'
