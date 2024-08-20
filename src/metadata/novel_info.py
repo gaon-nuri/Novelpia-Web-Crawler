@@ -1,11 +1,12 @@
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
-from bs4.filter import SoupStrainer
+from bs4.filter import SoupStrainer as Strainer
 
-from src.common.module import Page
+from src.common.module import Page, parser
 from src.common.userIO import print_under_new_line
 
 
@@ -24,16 +25,16 @@ class Novel(Page):
     :var _synopsis: 줄거리로 된 Markdown Callout
     """
     __slots__ = Page.__slots__ + (
-                                    "_writer_name",
-                                    "_rank",
-                                    "_tags",
-                                    "_status",
-                                    "_types",
-                                    "_ep",
-                                    "_alarm",
-                                    "_prefer",
-                                    "_synopsis",
-                                  )
+        "_writer_name",
+        "_rank",
+        "_tags",
+        "_status",
+        "_types",
+        "_ep",
+        "_alarm",
+        "_prefer",
+        "_synopsis",
+    )
 
     def __init__(self,
                  title: str = '',
@@ -46,9 +47,9 @@ class Novel(Page):
                  view: int = -1,
                  writer_name: str = '',
                  rank: str = '',
-                 tags: str = "tags:",
+                 tags: str = '',
                  status: str = '',
-                 types: tuple[str] = ('',),
+                 types: set[str] = None,
                  ep: int = -1,
                  alarm: int = -1,
                  prefer: int = -1,
@@ -61,6 +62,8 @@ class Novel(Page):
         self._rank = rank
         self._tags = tags
         self._status = status
+        if types is None:
+            types = set()
         self._types = types
         self._ep = ep
         self._alarm = alarm
@@ -98,7 +101,7 @@ class Novel(Page):
         if length < 1:
             print_under_new_line("태그를 한 개 이상 입력해 주세요.")
         else:
-            self._tags += "\n  - " + "\n  - ".join(tags)
+            self._tags = "\n  - " + "\n  - ".join(tags)
             """
             태그의 각 줄 앞에 '-'를 붙여서 Markdown list (Obsidian 태그) 형식으로 변환
             tags:
@@ -113,7 +116,6 @@ class Novel(Page):
     @mtime.setter
     def mtime(self, up_date_s: str):
         try:
-            from datetime import datetime
             datetime.fromisoformat(up_date_s)  # up_date_s: "2024-12-13"
         except ValueError as err:
             err.add_note(*err.args)
@@ -137,7 +139,7 @@ class Novel(Page):
 
     @status.setter
     def status(self, status: str):
-        statuses = frozenset(["완결", "연재지연", "연재중단", "삭제", "연습작품"])
+        statuses = frozenset(["연재 중", "완결", "연재지연", "연재중단", "삭제", "연습작품"])
         self.__pick_one_from("_status", status, statuses)
 
     @property
@@ -182,11 +184,10 @@ class Novel(Page):
         """줄거리의 각 줄 앞에 '>'를 붙여서 Markdown Callout 블록으로 변환 후 저장하는 함수
 
         :param synopsis: 줄거리
-        :type synopsis: str
         """
         lines = [line for line in synopsis.splitlines() if line != ""]
         synopsis_lines: list[str] = ["> [!TLDR] 시놉시스"] + lines
-        summary_callout = "\n> ".join(synopsis_lines)
+        summary_callout = "\n> ".join(synopsis_lines) + "\n"
         """
         > [!TLDR] 시놉시스
         > 괴담, 저주, 여학생 등….
@@ -205,9 +206,8 @@ def get_novel_up_dates(code: str, sort: str) -> str:
     from src.common.episode import get_ep_list, extract_ep_tags, get_ep_up_dates
 
     ep_li_html: str = get_ep_list(code, sort, 1, False)
-    page_li_soup = BeautifulSoup(ep_li_html, "html.parser", parse_only=SoupStrainer("table"))
 
-    ep_tags: set[Tag | None] = extract_ep_tags(page_li_soup, frozenset([1]))
+    ep_tags: list[Tag | None] = extract_ep_tags(ep_li_html, frozenset([1]))
     ep_tag = ep_tags.pop()
 
     up_dates: list[str] | None = get_ep_up_dates(frozenset([ep_tag]))
@@ -217,29 +217,35 @@ def get_novel_up_dates(code: str, sort: str) -> str:
 
 
 @contextmanager
-def chk_novel_status(novel: Novel, soup: BeautifulSoup):
-    """
-    파싱된 소설 메인 페이지에서 추출한 소설 정보를 담은 Dict를 반환하는 함수
+def chk_novel_status(novel: Novel, html: str):
+    """파싱된 소설 페이지에서 추출한 소설 정보를 담은 Dict를 반환하는 함수
 
     :param novel: 소설 정보가 담긴 Novel 클래스 객체
-    :param soup: 파싱된 소설 메인 페이지
-    :return: 페이지 제목, 수정된 소설 정보가 담긴 Dict
+    :param html: 소설 페이지 HTML
+    :return: 소설 정보가 담긴 Dict
     """
     # 페이지 제목 추출
-    title_tag = soup.select_one("title")
-    html_title: str = title_tag.text[22:]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
+    only_title = Strainer("title")
+    title_soup = Soup(html, parser, parse_only=only_title)
+
+    # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
+    html_title: str = title_soup.text[22:]
     """
     - 브라우저 상에 제목표시줄에 페이지 위치나 소설명이 표기됨.
     - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
     """
     novel.title = html_title
 
+    # HTML 中 소설 정보가 담긴 부분만 파싱
+    only_info = Strainer("div", {"class": "epnew-novel-info"})
+    info_soup = Soup(html, parser, parse_only=only_info)
+
     # 노벨피아 자체 제목 태그 추출
-    novel_title_tag: Tag = soup.select_one("div.epnew-novel-title")
+    title_tag: Tag = info_soup.select_one("div.epnew-novel-title")
 
     # 소설 서비스 상태 확인
     try:
-        novel_title: str = novel_title_tag.text
+        novel_title: str = title_tag.text
 
     # 서비스 상태 비정상, 소설 정보를 받지 못함
     except AttributeError as attr_err:
@@ -247,7 +253,8 @@ def chk_novel_status(novel: Novel, soup: BeautifulSoup):
 
         # 오류 메시지 추출
         from src.common.module import extract_alert_msg_w_error, get_postposition
-        with extract_alert_msg_w_error(soup) as (alert_msg, err):
+
+        with extract_alert_msg_w_error(html) as (alert_msg, err):
             if err:
                 print_under_new_line("예외 발생:", f"{err = }")
                 print_under_new_line("[오류] 알 수 없는 이유로 소설 정보를 추출하지 못했어요.")
@@ -261,13 +268,13 @@ def chk_novel_status(novel: Novel, soup: BeautifulSoup):
             elif alert_msg.endswith("잘못된 접근입니다."):
                 alert_msg = f"<{html_title}>에 대한 {alert_msg}"
 
-                novel.type = "자유"
+                novel.types.add("자유")
                 novel.status = "연습작품"
 
             # 오류 메시지 출력
             print_under_new_line("[노벨피아]", alert_msg)
 
-            yield novel, attr_err
+            yield novel, None, attr_err
 
     # 서비스 상태 정상
     else:
@@ -276,24 +283,25 @@ def chk_novel_status(novel: Novel, soup: BeautifulSoup):
         assert html_title == novel_title, assert_msg
         novel.title = novel_title
 
-        yield novel, None
+        yield novel, info_soup, None
 
 
 def extract_novel_info(html: str) -> Novel:
     """입력받은 소설의 메인 페이지 HTML에서 정보를 추출하여 반환하는 함수
 
-    :param html: 소설 Metadata 를 추출할 HTML
-    :return: 소설 제목, 추출한 Metadata 가 담긴 Dict
+    :param html: 소설 정보를 추출할 HTML
+    :return: 소설 제목, 추출한 정보가 담긴 Dict
     """
     novel = Novel()
     # print_under_new_line(novel)
 
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, "html.parser")
+    only_meta_url = Strainer("meta", {"property": "og:url"})
+    url_soup = Soup(html, parser, parse_only=only_meta_url)
+
+    # css_sel: str = "p.in-badge span, p.writer-tag span.tag, .counter-line-b span, span.writer-name"
 
     # 소설 메인 페이지 URL 추출
-    # tag: <meta content="w1" property="og:url"/>
-    meta_url_tag = soup.select_one("meta[property='og:url']")
+    meta_url_tag: Tag = url_soup.meta  # meta_url_tag: <meta content="w1" property="og:url"/>
     url: str = meta_url_tag.get("content")
 
     # URL 저장
@@ -304,30 +312,38 @@ def extract_novel_info(html: str) -> Novel:
     novel_code: str = urlparse(url).path.split("/")[-1]  # "https://novelpia.com/novel/1" > "1"
 
     # 제목 추출 및 소설 서비스 상태 확인
-    with chk_novel_status(novel, soup) as (novel, err):
+    with chk_novel_status(novel, html) as (novel, soup, err):
         if err:
             return novel
+        else:
+            info_soup = soup
 
     # 작가명 추출
-    author: str = soup.select_one("a.writer-name").string.strip()  # '제울'
+    only_writer = Strainer("a", {"class": "writer-name"})
+    writer_soup = Soup(html, parser, parse_only=only_writer)
+    author: str = writer_soup.text.strip()  # '제울'
+
+    # 작가명 저장
     novel.writer_name = author
 
     print_under_new_line(f"[알림] {author} 작가의 <{novel.title}>은 정상적으로 서비스 중인 소설이에요.")
 
     # 연재 유형(자유/PLUS), 청불/독점작/챌린지/연중(및 지연)/완결 여부
-    flag_list: list[str] = [badge.text for badge in soup.select(".in-badge span")]
+    badge_tag: Tag = info_soup.select_one("p.in-badge")
+    flag_list: list[str] = [badge.text for badge in badge_tag.select("span")]
 
     for flag in flag_list:
         if flag in ["19", "자유", "독점", "챌린지"]:
             if flag == "19":
                 flag = "성인"
-            novel.type = flag
-
-        # elif flag in novel.status.keys():  # ["연재 중", "삭제", "완결", "연재지연", "연재중단"] (flag 는 "연재 중"일 수 X)
-        #     novel.status[flag] = True
+            novel.types.add(flag)
+        elif flag in ["삭제", "완결", "연재지연", "연재중단"]:
+            novel.status = flag
+        else:
+            novel.status = "연재 중"
 
     # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
-    tag_set = soup.select("p.writer-tag span.tag")
+    tag_set = info_soup.select("p.writer-tag span.tag")
     """
     - 소설 등록시 최소 2개 이상의 해시태그를 지정해야 등록, 수정이 가능.
     - 모바일/PC 페이지가 같이 들어 있어서 태그가 중복 추출됨.
@@ -336,19 +352,17 @@ def extract_novel_info(html: str) -> Novel:
     """
 
     # PC, 모바일 중복 해시태그 제거
-    indices = int(len(tag_set) / 2)  # 3
+    indices = int(len(tag_set) / 2)  # indices: 3
     hash_tags: list[str] = [i.string.lstrip("#") for i in tag_set[:indices]]  # ['판타지','현대', '하렘']
 
     novel.tags = hash_tags
 
     # 조회, 추천수 추출
-    ep_stat_list: list[str] = [i.text.replace(",", "") for i in soup.select(".counter-line-a span")]
-
-    novel.view = int(ep_stat_list[1])  # 83,050,765 > 83050765
-    novel.recommend = int(ep_stat_list[3])  # 4,540,540 > 4540540
+    pro_ep_stats: list[str] = [i.text.replace(",", "") for i in info_soup.select(".counter-line-a span", limit=4)]
+    novel.view, novel.recommend = map(int, pro_ep_stats[1::2])
 
     # 인생픽 순위 추출
-    sole_pick_rank: str = soup.select(".counter-line-b span")[1].text
+    sole_pick_rank: str = info_soup.select(".counter-line-b span", limit=2)[1].extract().text
 
     # 인생픽 순위 공개 중, 속성 추가
     if sole_pick_rank.endswith("위"):  # 40위
@@ -359,29 +373,26 @@ def extract_novel_info(html: str) -> Novel:
         pass
 
     # 선호/알람/회차 수 추출
-    novel_stats: list = [i.string.replace(",", "") for i in soup.select("span.writer-name")]
-    novel_stats[2] = novel_stats[2].removesuffix("회차")  # 239회차 > 239
-    novel_stats = list(map(int, novel_stats))  # [7694, 879, 239]
-
-    novel_stats = novel_stats[::-1]  # [239, 879, 7694]
+    pro_user_stats: list = [i.string.replace(",", "") for i in info_soup.select("span.writer-name")]
+    pro_user_stats[2] = pro_user_stats[2].removesuffix("회차")  # 239회차 > 239
+    pro_user_stats = list(map(int, pro_user_stats[::-1]))  # [7694, 879, 239]
 
     # 회차/선호/알람 수 저장
-    novel.ep, novel.alarm, novel.prefer = novel_stats
+    novel.ep, novel.alarm, novel.prefer = pro_user_stats
 
     # 프롤로그 존재 시 회차 수 1 가산
     # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
     from src.common.episode import has_prologue
     if has_prologue(novel_code):
-        novel_stats[2] += 1
+        pro_user_stats[2] += 1
 
     # 줄거리 추출 및 저장
-    novel.synopsis = soup.select_one("div.synopsis").text
+    novel.synopsis = info_soup.select_one("div.synopsis").text
 
     # 첫/마지막 연재 일자 추출 및 저장
     novel.ctime, novel.mtime = map(get_novel_up_dates, [novel_code] * 2, ["DOWN", "UP"])
 
     # 크롤링 일자 저장
-    from datetime import datetime
     novel.got_time = datetime.today()
 
     return novel
@@ -393,8 +404,6 @@ def novel_info_to_md(novel: Novel) -> str:
     :param novel: 소설 정보가 담긴 객체
     :return: Markdown 문서
     """
-    lines: list[str] = []
-
     print_under_new_line(f"[알림] {novel.title}.md 파일에 '유입 경로' 속성을 추가했어요. Obsidian 으로 직접 수정해 주세요.")
 
     # 삭제된 소설, Markdown 미작성
@@ -402,21 +411,22 @@ def novel_info_to_md(novel: Novel) -> str:
         return "삭제"
 
     # 소설 서비스 상태 정상, Markdown 작성
-    lines = ["aliases:\n  - (직접 적어 주세요)"] + lines
-    lines.append("유입 경로: (직접 적어 주세요)")
-
-    lines: list[str] = ["작가명: " + novel.writer_name,
-                        "소설 링크: " + novel.url, novel.tags,
-                        "유입 경로: ",
-                        "연재 시작일: " + novel.ctime,
-                        "최근(예정) 연재일: " + novel.mtime,
-                        "완독일: ",
-                        "정보 수집일: " + novel.got_time,
-                        "회차 수: " + str(novel.ep),
-                        "알람 수: " + str(novel.alarm),
-                        "선호 수: " + str(novel.prefer),
-                        "추천 수: " + str(novel.recommend),
-                        "조회 수: " + str(novel.view)]
+    lines: list[str] = [
+        "aliases:\n  - (직접 적어 주세요)",
+        "유입 경로: (직접 적어 주세요)",
+        "작가명: " + novel.writer_name,
+        "소설 링크: " + novel.url,
+        "tags:" + novel.tags,
+        "완독일: 0000-00-00",
+        "연재 시작일: " + novel.ctime,
+        "최근(예정) 연재일: " + novel.mtime,
+        "정보 수집일: " + novel.got_time,
+        "회차 수: " + str(novel.ep),
+        "알람 수: " + str(novel.alarm),
+        "선호 수: " + str(novel.prefer),
+        "추천 수: " + str(novel.recommend),
+        "조회 수: " + str(novel.view)
+    ]
 
     lines = ["---"] + lines
     lines.append("---")
@@ -472,10 +482,13 @@ def novel_info_main() -> None:
     # Markdown 폴더 확보 및 새 파일 열기
     from src.common.module import opened_x_error
     with opened_x_error(md_file_name, "x") as (f, err):
-        assert f is not None
-        # print(md_file_content, file=f)
-        f.write(md_file_content)
-        print_under_new_line("[알림]", md_file_name, "파일을 작성했어요.")
+        if err:
+            print_under_new_line(f"예외 발생: {err = }")
+        else:
+            # assert f is not None
+            # print(md_file_content, file=f)
+            f.write(md_file_content)
+            print_under_new_line("[알림]", md_file_name, "파일을 작성했어요.")
 
 
 if __name__ == "__main__":
