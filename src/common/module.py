@@ -1,14 +1,14 @@
 from contextlib import contextmanager
 from datetime import datetime
-from json import JSONDecodeError, loads
 from pathlib import Path
-
-from bs4 import BeautifulSoup
 
 from src.common.userIO import print_under_new_line
 
 # Windows Chrome User-Agent String
 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
+
+# bs4 용 파이썬 내장 파서
+parser = "html.parser"
 
 
 class Page:
@@ -77,7 +77,6 @@ class Page:
     def code(self, code: str):
         if all([isinstance(code, str), code.isnumeric(), int(code) > 0]):
             self._code = code
-            # self._url = "https://novelpia.com/novel/" + code
         else:
             print_under_new_line(f"{self}.code를 {code}(으)로 바꿀 수 없어요.")
             print("소설 번호를 자연수로 설정해 주세요.")
@@ -301,6 +300,12 @@ def get_postposition(kr_word: str, postposition: str) -> str:
 
 @contextmanager
 def load_json_w_error(res_json: str):
+    """입력받은 JSON을 dict로 가져오고 해당 dict와 오류 내역을 반환하는 함수
+
+    :param res_json: 응답 JSON
+    """
+    from json import JSONDecodeError, loads
+
     try:
         dic: dict = loads(res_json)
     except JSONDecodeError as je:
@@ -312,27 +317,30 @@ def load_json_w_error(res_json: str):
 
 
 @contextmanager
-def extract_alert_msg_w_error(soup: BeautifulSoup):
-    """소설 메인 페이지에서 알림 창의 오류 메시지를 추출하는 함수
+def extract_alert_msg_w_error(html: str):
+    """소설 페이지에서 알림 창의 오류 메시지를 추출하는 함수
 
-    :param soup: BeautifulSoup 객체
+    :param html: 소설 페이지 HTML
     :return: 오류 메시지
     """
+    from bs4 import BeautifulSoup as Soup
+
+    soup = Soup(html, parser)
     try:
         msg_tag = soup.select_one("#alert_modal .mg-b-5")
 
     # 알림 창이 나오지 않음
     except AttributeError as err:
-        print_under_new_line("예외 발생:",  f"{err = }")
+        print_under_new_line("예외 발생:", f"{err = }")
         yield None, err
 
     # 알림 추출
     else:
         alert_msg: str = msg_tag.text
         """
-        0: 잘못된 소설 번호 입니다. (제목, 줄거리 無)
-        2: 삭제된 소설 입니다. (제목 有, 줄거리 無)
-        200000: 잘못된 접근입니다. (제목 有, 줄거리 無)
+        1. 잘못된 소설 번호 입니다. (제목, 줄거리 無)
+        2. 삭제된 소설 입니다. (제목 有, 줄거리 無)
+        3. 잘못된 접근입니다. (제목 有, 줄거리 無)
         - 연습등록작품은 작가만 열람이 가능
         - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
         """
@@ -343,16 +351,22 @@ def extract_alert_msg_w_error(soup: BeautifulSoup):
 
 
 @contextmanager
-def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
+def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8"):
+    """입력받은 대로 파일을 열고 파일과 오류 내역을 반환하는 함수
+
+    :param file_path: 파일 경로
+    :param mode: 파일 모드 (읽기, 쓰기, 붙이기, ..)
+    :param encoding: 파일의 인코딩 (기본 UTF-8)
+    """
     assert mode.find("b") == -1
-    assure_path_exists(file_name)
+    assure_path_exists(file_path)
     try:
-        f = open(file_name, mode, encoding='utf-8')
+        f = open(file_path, mode, encoding='utf-8')
 
     # 기존 텍스트 파일을 "xt" 모드로 열 때
     except FileExistsError:
         from time import ctime
-        mtime: str = ctime(file_name.stat().st_mtime)
+        mtime: str = ctime(file_path.stat().st_mtime)
 
         # 덮어쓸 것인지 질문
         question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
@@ -362,21 +376,20 @@ def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
 
         # 덮어 쓰기
         if asked_overwrite and can_overwrite:
-            print_under_new_line("[알림]", file_name, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
-            with opened_x_error(file_name, "wt", encoding) as (f, err):
+            print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
+            with opened_x_error(file_path, "wt", encoding) as (f, err):
                 yield f, err
 
         # 기존 파일 유지
         else:
-            print_under_new_line("[알림] 기존 파일이 있으니 파일 생성은 건너 뛸게요.")
-            with opened_x_error(file_name, "rt", encoding) as (f, err):
-                yield f, err
+            print_under_new_line("[알림] 수집한 정보를 버리고 기존 파일을 유지할게요.")
+            yield None, FileExistsError
 
     except OSError as err:
         yield None, err
 
     else:
-        print_under_new_line("[알림]", file_name, "파일을 열었어요.")
+        print_under_new_line("[알림]", file_path, "파일을 열었어요.")
         try:
             yield f, None
         finally:
@@ -385,4 +398,5 @@ def opened_x_error(file_name: Path, mode: str = "xt", encoding: str = "utf-8"):
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()
