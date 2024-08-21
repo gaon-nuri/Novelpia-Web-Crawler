@@ -33,61 +33,6 @@ class GetFinalJamo(TestCase):
         self.assertEqual(answer_post, GetFinalJamo.vowel_post)
 
 
-class ConvertToMarkdown(TestCase):
-    def test_convert_to_md(self):
-        """
-        소설 정보가 담긴 Dict 를 Markdown 형식의 문자열로 변환하는 테스트
-        :return: Markdown 형식의 소설 정보
-        """
-        from src.metadata.novel_info import Novel, novel_info_to_md
-
-        novel = Novel()
-
-        novel.title = '숨겨진 흑막이 되었다'
-        novel.writer_name = '미츄리'
-        novel.url = 'https://novelpia.com/novel/247416'
-        novel.tags = ['현대판타지', '하렘', '괴담', '집착']
-        novel.ctime = '2023-12-11'
-        novel.mtime = '2024-04-18'
-        novel.status = '완결'
-        novel.types.add('독점')
-        novel.ep = 225
-        novel.alarm = 1142
-        novel.prefer = 14616
-        novel.recommend = 224772
-        novel.view = 2189821
-        novel.synopsis = '괴담, 저주, 여학생 등….\n집착해선 안 될 것들이 내게 집착한다'
-
-        formatted_md: str = """---
-aliases:
-  - (직접 적어 주세요)
-유입 경로: (직접 적어 주세요)
-작가명: 미츄리
-소설 링크: https://novelpia.com/novel/247416
-tags:
-  - 현대판타지
-  - 하렘
-  - 괴담
-  - 집착
-완독일: 0000-00-00
-연재 시작일: 2023-12-11
-최근(예정) 연재일: 2024-04-18
-정보 수집일: 0000-00-00
-회차 수: 225
-알람 수: 1142
-선호 수: 14616
-추천 수: 224772
-조회 수: 2189821
----
-> [!TLDR] 시놉시스
-> 괴담, 저주, 여학생 등….
-> 집착해선 안 될 것들이 내게 집착한다
-"""
-        converted_md = novel_info_to_md(novel)
-
-        self.assertEqual(formatted_md, converted_md)
-
-
 class GetNovelStatus(TestCase):
     """연중작, 완결작, 연재작의 연재 상태를 각각 추출하는 테스트."""
 
@@ -171,6 +116,98 @@ class CntNovelInStatus(GetNovelStatus):
                 up_status: str = self.chk_up_status(code)
 
                 self.assertTrue(up_status == status)
+
+
+class NovelToMdFile(TestCase):
+    from src.metadata.novel_info import Novel
+
+    novel = Novel(
+        '숨겨진 흑막이 되었다',
+        '247416',
+        'https://novelpia.com/novel/247416',
+        '2023-12-11',
+        '2024-04-18',
+        224772,
+        2189821,
+        '미츄리',
+        '공개전',
+        '\n  - 현대판타지\n  - 하렘\n  - 괴담\n  - 집착',
+        '완결',
+        {'독점'},
+        225,
+        1142,
+        14616,
+        '> [!TLDR] 시놉시스\n> 괴담, 저주, 여학생 등….\n> 집착해선 안 될 것들이 내게 집착한다\n'
+    )
+
+    def test_novel_to_md(self):
+        """소설 정보가 담긴 Dict 를 Markdown 형식의 문자열로 변환하는 테스트
+
+        :return: Markdown 형식의 소설 정보
+        """
+        from src.metadata.novel_info import novel_info_to_md
+
+        formatted_md: str = """---
+aliases:
+  - (직접 적어 주세요)
+유입 경로: (직접 적어 주세요)
+작가명: 미츄리
+소설 링크: https://novelpia.com/novel/247416
+tags:
+  - 현대판타지
+  - 하렘
+  - 괴담
+  - 집착
+완독일: 0000-00-00
+연재 시작일: 2023-12-11
+최근(예정) 연재일: 2024-04-18
+정보 수집일: 0000-00-00
+회차 수: 225
+알람 수: 1142
+선호 수: 14616
+추천 수: 224772
+조회 수: 2189821
+---
+> [!TLDR] 시놉시스
+> 괴담, 저주, 여학생 등….
+> 집착해선 안 될 것들이 내게 집착한다
+"""
+        converted_md = novel_info_to_md(NovelToMdFile.novel)
+
+        self.assertEqual(formatted_md, converted_md)
+
+    @skip
+    def test_novel_to_md_file(self):
+        from src.metadata.novel_info import novel_to_md_file
+
+        novel_to_md_file(NovelToMdFile.novel)
+
+        self.fail()
+
+    def test_novels_to_md_files(self):
+        from src.myTest.test_module import total_novel_cnt
+        from src.common.module import get_novel_main_w_error, print_under_new_line
+
+        from urllib.parse import urljoin
+
+        base_url: str = "https://novelpia.com/novel/"
+        urls = (urljoin(base_url, str(code)) for code in range(1, total_novel_cnt))
+
+        for i in range(1, total_novel_cnt):
+            url = next(urls)
+            with self.subTest(url=url):
+                with get_novel_main_w_error(url) as (html, err):
+                    if err:
+                        print_under_new_line("[오류]", f"{err = }")
+                        self.fail()
+                    else:
+                        from src.metadata.novel_info import Novel, extract_novel_info, novel_to_md_file
+
+                        novel: Novel = extract_novel_info(html)
+                        if novel is None:
+                            self.fail()
+                        novel_to_md_file(novel, True)
+                self.assertTrue(True)
 
 
 if __name__ == '__main__':
