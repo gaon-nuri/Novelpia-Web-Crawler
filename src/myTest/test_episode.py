@@ -136,16 +136,19 @@ class GetNovelUpDate(TestCase):
     @staticmethod
     def get_novel_up_date(novel_code: str, sort: str = "DOWN", ep_no: int = 1):
         from src.common.episode import extract_ep_tags, get_ep_up_dates
+        from typing import Generator
 
         list_html: str = get_ep_list(novel_code, sort)
-        ep_tags: list[Tag] = extract_ep_tags(list_html, frozenset({ep_no}))
+        ep_tags: Generator = extract_ep_tags(list_html, frozenset({ep_no}))
 
-        if ep_tags is None:
-            return None
-        else:
-            ep_tag: Tag = ep_tags.pop()
+        try:
+            ep_tag: Tag = next(ep_tags)
+        except StopIteration as err:
+            exit("[오류] " + f"{err = }")
 
-        up_dates: list[str] | None = get_ep_up_dates(frozenset({ep_tag}))
+        ep_tag_gen: Generator = (ep_tag for ep_tag in [ep_tag])
+        up_dates: list[str] | None = get_ep_up_dates(ep_tag_gen)
+
         if up_dates is None:
             return None
         else:
@@ -200,10 +203,12 @@ class GetEpViewCount(TestCase):
         :return: 추출한 조회 수가 실제 조회수와 같으면 성공
         """
         novel_code: str = "30"
-        ep_codes: frozenset[str] = frozenset({"309"})
+        from typing import Generator
+
+        ep_codes: Generator = (s for s in ["309"])
         real_view_count: int = 5
 
-        got_view_counts: list[int] | None = get_ep_view_counts(novel_code, ep_codes)
+        got_view_counts: list[int] | None = get_ep_view_counts(novel_code, ep_codes, 1)
         assert got_view_counts is not None, "조회수를 받지 못했어요."
 
         got_view_count = got_view_counts[0]
@@ -273,12 +278,13 @@ class GetEpViewCount(TestCase):
             ]
         }
         real_view_dics: list[dict] = real_view_json["list"]
+        ep_count: int = len(real_view_dics)
 
         # dic: {"episode_no": 280, "count_view": "35"}
-        ep_codes: frozenset[str] = frozenset([str(dic["episode_no"]) for dic in real_view_dics])
+        ep_codes = (str(dic["episode_no"]) for dic in real_view_dics)
         real_view_counts: list[int] = [int(dic["count_view"]) for dic in real_view_dics]
 
-        got_view_counts: list[int] = get_ep_view_counts(novel_code, ep_codes)
+        got_view_counts: list[int] = get_ep_view_counts(novel_code, ep_codes, ep_count)
 
         self.assertEqual(real_view_counts, got_view_counts)
 
