@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Generator
 
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet, Tag
@@ -111,10 +112,10 @@ class Ep(Page):
         self.__set_signed_int("_comment", comment)
 
 
-def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = False) -> str:
+def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, login: bool = False) -> str:
     """서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
 
-    :param code: 소설 번호
+    :param novel_code: 소설 번호
     :param sort: "DOWN", 첫화부터 / "UP", 최신화부터
     :param page: 요청할 페이지 번호
     :param login: 로그인 키 사용 여부 (링크 추출용)
@@ -122,7 +123,7 @@ def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = Fals
     """
     # Chrome DevTools 에서 복사한 POST 요청 URL 및 양식 데이터
     req_url: str = "https://novelpia.com/proc/episode_list"
-    form_data: dict = {"novel_no": code, "sort": sort, "page": page - 1}  # 1페이지 -> page = 0, ...
+    form_data: dict = {"novel_no": novel_code, "sort": sort, "page": page - 1}  # 1페이지 -> page = 0, ...
     headers: dict[str: str] = {'User-Agent': ua}
 
     # 요청 헤더에 로그인 키 추가
@@ -136,18 +137,14 @@ def get_ep_list(code: str, sort: str = "DOWN", page: int = 1, login: bool = Fals
     return ep_list_html
 
 
-def get_ep_view_counts(novel_code: str, ep_codes: frozenset[str]) -> list[int] | None:
+def get_ep_view_counts(novel_code: str, ep_codes: Generator, ep_count: int) -> list[int] | None:
     """입력받은 소설의 회차들의 조회수를 응답받아 반환하는 함수
 
-    :param novel_code: 회차가 속한 소설 번호
-    :param ep_codes: 조회수를 받아올 회차들의 번호
+    :param novel_code: 소설 번호
+    :param ep_codes: 회차 번호 제너레이터
+    :param ep_count: 회차의 수
     :return: 조회수 목록
     """
-    ep_count: int = len(ep_codes)
-    if ep_count < 1:
-        print_under_new_line("회차를 한 개 이상 선택하세요")
-        return None
-
     url: str = "https://novelpia.com/proc/novel"
     form_data: dict = {
         "cmd": "get_episode_count_view",
@@ -168,19 +165,20 @@ def get_ep_view_counts(novel_code: str, ep_codes: frozenset[str]) -> list[int] |
         "errmsg": "",
         "list": [{"episode_num": 3, "count_view": "1,057"}, ...]
     }"""
-
-    # 응답에서 회차별 조회수 목록을 추출
     from src.common.module import load_json_w_error
+
+    # 응답에서 회차별 조회 수 목록을 추출
     with load_json_w_error(view_cnt_json) as (res_dic, err):
         # 잘못된 요청 URL, 작업(cmd), 헤더
         # JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
         if err:
             return None
         else:
-            view_cnt_dics: list[dict] = res_dic["list"]
+            view_cnt_dics = iter(res_dic["list"])
 
     view_counts: list[int] = [-1] * ep_count
 
+    # 회차별 조회 수 추출
     for i, dic in enumerate(view_cnt_dics):  # dic: {'count_view': '1', 'episode_no': 12606}
         view_count: str = dic["count_view"]
         view_counts[i] = int(view_count.replace(",", ""))
@@ -193,45 +191,50 @@ def get_ep_view_counts(novel_code: str, ep_codes: frozenset[str]) -> list[int] |
     return view_counts
 
 
-def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]) -> list[Tag] | None:
+def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]):
     """입력받은 회차 목록에서 선택한 회차들의 태그를 추출하여 하나씩 반환하는 함수
 
     :param list_html: 회차 목록 HTML
     :param ep_num_queue: 태그를 추출할 회차 서수의 집합
     :return: 회차 태그의 집합
     """
-    # 회차 Tag 목록 추출
-    only_ep = SoupStrainer("tr", {"class": "ep_style5"})
+    # 회차 Table 추출
+    only_ep = SoupStrainer("table", {"class": "s_inv"})
     soup = BeautifulSoup(list_html, parser, parse_only=only_ep)
 
     # 작성된 회차 無
     if len(soup.contents) == 0:
         print_under_new_line("[노벨피아] 작성된 글을 찾을 수 없습니다.")
-        return None
 
-    ep_tags: ResultSet[Tag] = soup.select("td.font12", limit=20)
+        yield None
+
+    # 회차 Tag 목록 추출
+    ep_tags: ResultSet[Tag] = soup.select("tr.ep_style5", limit=20)
 
     for ep_num in ep_num_queue:
         assert ep_num > 0, "잘못된 회차 서수"
-        try:  # 입력받은 서수의 회차 검색
+
+        # 회차 검색
+        try:
             ep_tag: Tag = ep_tags[ep_num - 1]
-        except IndexError:  # 회차 못 찾음
-            print_under_new_line("[오류]", str(ep_num) + "번째 회차를 찾지 못했어요.")
-        else:  # 회차 찾음
+
+        # 회차 못 찾음
+        except IndexError:
+            print_under_new_line("[오류]", ep_num, "번째 회차를 찾지 못했어요.")
+
+        # 회차 찾음
+        else:
             ep_tags.append(ep_tag)
 
-    return ep_tags
+    yield from ep_tags
 
 
-def get_ep_up_dates(ep_tags: frozenset[Tag]) -> list[str | None] | None:
+def get_ep_up_dates(ep_tags: Generator) -> list[str | None] | None:
     """목록에서 추출한 회차 Tag 들의 Set 에서 각각의 게시 일자를 추출하여 반환하는 함수
 
     :param ep_tags: 회차 Tag 목록
     :return: 입력받은 회차들의 게시 일자. 작성된 회차가 없으면 None, 입력된 회차가 없으면 list[None]
     """
-    if not any(ep_tags):
-        return None
-
     ep_up_dates: list[str | None] = []
 
     for ep_tag in ep_tags:
@@ -260,27 +263,31 @@ def get_ep_up_dates(ep_tags: frozenset[Tag]) -> list[str | None] | None:
 
         # 예약 회차
         elif up_date_str.endswith("후"):
-            from datetime import timedelta
             today: datetime = datetime.today()
 
             # 예약 회차는 공개 하루 전부터 노출
-            if up_date_str[1].isnumeric():
-                end_index: int = 1
-            else:
-                end_index: int = 0
+            end_index: int = -1
+
+            for i in range(len(up_date_str)):
+                if up_date_str[i].isnumeric():
+                    end_index: int = i
 
             assert end_index != -1
 
             # 남은 시간이 1시간 미만
             if up_date_str[end_index + 1] == "분":
                 min_left = int(up_date_str[:end_index + 1])
-                up_datetime = today + timedelta(minutes=min_left)
 
+                from datetime import timedelta
+
+                up_datetime = today + timedelta(minutes=min_left)
                 up_date_str = up_datetime.isoformat(timespec="minutes")
 
             # 남은 시간이 1시간 이상 하루 미만
             elif up_date_str[end_index + 1] == "시":
                 hour_left = int(up_date_str[:end_index + 1])
+                from datetime import timedelta
+
                 if hour_left == 24:
                     up_datetime = today + timedelta(days=1)
                 else:
@@ -288,12 +295,15 @@ def get_ep_up_dates(ep_tags: frozenset[Tag]) -> list[str | None] | None:
 
                 # 'N+1 시간 후'일 경우 N 시간 < 실제 잔여 시간 <= N+1 시간
                 up_date_str = up_datetime.isoformat(timespec="hours")
+
+            # 잘못된 잔여 시간
             else:
                 raise ValueError("잘못된 예약 시간: " + up_date_str)
 
         # 연재 일자가 과거의 날짜
         else:
             from datetime import date
+
             ctime: date = datetime.strptime(up_date_str, "%y.%m.%d").date()  # 21.01.18 > 2021-01-18
             up_date_str = ctime.isoformat()
 
@@ -309,15 +319,13 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     :param ep_no: 추출할 회차의 목록 내 서수 (1부터 20까지)
     :return: 제목, 화수, 번호, 무료/성인 여부, 글자/댓글/조회/추천 수, 게시 일자
     """
-    ep_tags: list[Tag] = extract_ep_tags(list_html, frozenset({ep_no}))
+    ep_tags: Generator = extract_ep_tags(list_html, frozenset({ep_no}))
+    ep_tag: Tag = next(ep_tags)
 
-    if ep_tags is None or ep_tags == [None]:
+    if ep_tag is None:
         return None
 
-    ep_tag: Tag = ep_tags.pop()
-
-    # 회차 찾음
-    # Ep 클래스 객체 생성
+    # 회차 찾음, Ep 클래스 객체 생성
     ep = Ep()
 
     headline: Tag = ep_tag.select_one("b")  # 각종 텍스트 추출
@@ -343,8 +351,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
 
         return ep
 
-    from typing import Iterable  # Type Hint: str | Iterable[str]
-    types: list[str] = [tag.attrs['class'][0] for tag in span_tags]  # ['b_free', 's_inv']
+    types = (tag.attrs['class'][0] for tag in span_tags)  # ['b_free', 's_inv']
 
     # 유형 저장
     if 'b_free' in types:
@@ -377,6 +384,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     view_tag: Tag = stats_tag.select_one(".episode_count_view").extract()
     # print_under_new_line(f"제거: {view_tag = }")
 
+    from typing import Iterable
+
     # ("episode_count_view", "novel_count_view_7146")
     types: str | Iterable[str] = view_tag.attrs['class']
     ep_code: str = types[1].lstrip("novel_count_view_")
@@ -388,7 +397,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     ep.url = urljoin("https://novelpia.com/viewer/", ep_code)
 
     # 게시/크롤링 일자 추출 및 저장
-    ep.ctime = get_ep_up_dates(frozenset({ep_tag}))[0]
+    ep_tag_gen: Generator = (ep_tag for ep_tag in [ep_tag])
+    ep.ctime = get_ep_up_dates(ep_tag_gen)[0]
 
     ep.got_time = datetime.today()
 
@@ -401,7 +411,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     novel_code: str = click[click.find("page") + 5: click.find("]") - 1]
 
     # 조회수 추출
-    view_counts: list[int] | None = get_ep_view_counts(novel_code, frozenset([ep_code]))
+    ep_code_gen: Generator = (ep_code for ep_code in [ep_code])
+    view_counts: list[int] | None = get_ep_view_counts(novel_code, ep_code_gen, 1)
 
     # 조회수 저장
     if view_counts is not None:
@@ -462,7 +473,7 @@ def has_prologue(novel_code: str) -> bool:
     ep_list_html: str = get_ep_list(novel_code, "DOWN", 1)
     ep = extract_ep_info(ep_list_html, 1)
 
-    return ep.num == 0
+    return ep is None or ep.num == 0
 
 
 def ep_content_to_md(ep: Ep, ep_lines: list[str]):
@@ -471,15 +482,15 @@ def ep_content_to_md(ep: Ep, ep_lines: list[str]):
     :param ep: Ep 클래스의 객체
     :param ep_lines: 회차 본문 줄별 목록
     """
-    property_lines: list[str] = ["공개 일자: " + ep.ctime,
-                                 "회차 링크: " + ep.url,
-                                 "화수: " + str(ep.num),
-                                 "댓글 수: " + str(ep.comment),
-                                 "글자 수: " + str(ep.letter),
-                                 "조회 수: " + str(ep.view),
-                                 "추천 수: " + str(ep.recommend)
-                                 ]
-
+    property_lines: list[str] = [
+        "공개 일자: " + ep.ctime,
+        "회차 링크: " + ep.url,
+        "화수: " + str(ep.num),
+        "댓글 수: " + str(ep.comment),
+        "글자 수: " + str(ep.letter),
+        "조회 수: " + str(ep.view),
+        "추천 수: " + str(ep.recommend)
+    ]
     property_lines = ["---"] + property_lines
     property_lines.append("---")
 
@@ -489,12 +500,14 @@ def ep_content_to_md(ep: Ep, ep_lines: list[str]):
     yield from md_lines
 
 
-def ep_content_to_html(lines: list[str]):
+def ep_content_to_html(ep: Ep, lines: list[str]):
     """회차 제목과 본문을 입력받아 HTML 문서 제너레이터를 반환하는 함수
 
+    :param ep: Ep 클래스 객체
     :param lines: 회차 본문 줄 목록
     :return: HTML 문서를 한 줄씩 반환하는 제너레이터
     """
+    print(ep)
     contents: list[str] = []
     # style_attr: str = '\"font-size: 18px; line-height: 125%; max-width: 900px; margin: 0px auto;\"'
     # '<div style=' + style_attr + '>\n'
