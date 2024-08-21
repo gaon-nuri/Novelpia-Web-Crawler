@@ -31,7 +31,7 @@ def chk_str_type(in_str: str, check_type: type = str) -> bool:
         # 해당 형식으로 변환할 수 없는 문자열
         except ValueError as ve:
             ve.add_note("args: " + ', '.join(map(str, ve.args)))
-            print_under_new_line(f"예외 발생: {ve = }")
+            print_under_new_line("[오류]",  f"{ve = }")
             return False
 
 
