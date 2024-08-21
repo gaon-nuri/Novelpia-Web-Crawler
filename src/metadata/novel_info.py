@@ -42,11 +42,10 @@ class Novel(Page):
                  url: str = '',
                  ctime: str = '0000-00-00',
                  mtime: str = '0000-00-00',
-                 got_time: str = '0000-00-00',
                  recommend: int = -1,
                  view: int = -1,
                  writer_name: str = '',
-                 rank: str = '',
+                 rank: str = '공개전',
                  tags: str = '',
                  status: str = '',
                  types: set[str] = None,
@@ -56,7 +55,7 @@ class Novel(Page):
                  synopsis: str = ''
                  ):
 
-        super().__init__(title, code, url, ctime, mtime, got_time, recommend, view)
+        super().__init__(title, code, url, ctime, mtime, recommend=recommend, view=view)
 
         self._writer_name = writer_name
         self._rank = rank
@@ -96,7 +95,7 @@ class Novel(Page):
         return self._tags
 
     @tags.setter
-    def tags(self, tags: list[str]):
+    def tags(self, tags: set[str]):
         length: int = len(tags)
         if length < 1:
             print_under_new_line("태그를 한 개 이상 입력해 주세요.")
@@ -119,7 +118,7 @@ class Novel(Page):
             datetime.fromisoformat(up_date_s)  # up_date_s: "2024-12-13"
         except ValueError as err:
             err.add_note(*err.args)
-            print_under_new_line("예외 발생: " + f"{err = }")
+            print_under_new_line("[오류]", f"{err = }")
             raise
         else:
             self._mtime = up_date_s
@@ -185,7 +184,7 @@ class Novel(Page):
 
         :param synopsis: 줄거리
         """
-        lines = [line for line in synopsis.splitlines() if line != ""]
+        lines = [line.lstrip("#") for line in synopsis.splitlines() if line != ""]
         synopsis_lines: list[str] = ["> [!TLDR] 시놉시스"] + lines
         summary_callout = "\n> ".join(synopsis_lines) + "\n"
         """
@@ -207,10 +206,10 @@ def get_novel_up_dates(code: str, sort: str) -> str:
 
     ep_li_html: str = get_ep_list(code, sort, 1, False)
 
-    ep_tags: list[Tag | None] = extract_ep_tags(ep_li_html, frozenset([1]))
-    ep_tag = ep_tags.pop()
+    from typing import Generator
 
-    up_dates: list[str] | None = get_ep_up_dates(frozenset([ep_tag]))
+    ep_tags: Generator = extract_ep_tags(ep_li_html, frozenset([1]))
+    up_dates: list[str] | None = get_ep_up_dates(ep_tags)
     up_date: str = up_dates[0]
 
     return up_date
@@ -249,27 +248,29 @@ def chk_novel_status(novel: Novel, html: str):
 
     # 서비스 상태 비정상, 소설 정보를 받지 못함
     except AttributeError as attr_err:
-        print_under_new_line("예외 발생:", f"{attr_err = }")
 
         # 오류 메시지 추출
         from src.common.module import extract_alert_msg_w_error, get_postposition
 
         with extract_alert_msg_w_error(html) as (alert_msg, err):
             if err:
-                print_under_new_line("예외 발생:", f"{err = }")
+                print_under_new_line("[오류]", f"{err = }")
                 print_under_new_line("[오류] 알 수 없는 이유로 소설 정보를 추출하지 못했어요.")
 
-            elif alert_msg.endswith("삭제된 소설 입니다."):
+            elif alert_msg == "삭제된 소설 입니다.":
                 postposition: str = get_postposition(html_title, "은")
                 alert_msg = f"<{html_title}>{postposition} {alert_msg}"
 
                 novel.status = "삭제"
 
-            elif alert_msg.endswith("잘못된 접근입니다."):
+            elif alert_msg == "잘못된 접근입니다.":
                 alert_msg = f"<{html_title}>에 대한 {alert_msg}"
 
                 novel.types.add("자유")
                 novel.status = "연습작품"
+
+            elif alert_msg == '잘못된 소설 번호 입니다.':
+                novel = None
 
             # 오류 메시지 출력
             print_under_new_line("[노벨피아]", alert_msg)
@@ -310,6 +311,9 @@ def extract_novel_info(html: str) -> Novel:
     # 소설 번호 추출
     from urllib.parse import urlparse
     novel_code: str = urlparse(url).path.split("/")[-1]  # "https://novelpia.com/novel/1" > "1"
+
+    # 소설 번호 저장
+    novel.code = novel_code
 
     # 제목 추출 및 소설 서비스 상태 확인
     with chk_novel_status(novel, html) as (novel, soup, err):
@@ -390,10 +394,8 @@ def extract_novel_info(html: str) -> Novel:
     novel.synopsis = info_soup.select_one("div.synopsis").text
 
     # 첫/마지막 연재 일자 추출 및 저장
-    novel.ctime, novel.mtime = map(get_novel_up_dates, [novel_code] * 2, ["DOWN", "UP"])
-
-    # 크롤링 일자 저장
-    novel.got_time = datetime.today()
+    if novel.ep != 0:
+        novel.ctime, novel.mtime = map(get_novel_up_dates, [novel_code] * 2, ["DOWN", "UP"])
 
     return novel
 
@@ -440,16 +442,12 @@ def novel_info_to_md(novel: Novel) -> str:
     return md_string
 
 
-def novel_info_main() -> None:
-    """
-    모듈 대신 스크립트로 실행할 때 호출되는 함수.
-    """
-    base_url: str = "https://novelpia.com/novel/"
+def novel_to_md_file(novel: Novel, skip: bool = False):
     novel_dir = Path(Path.cwd(), "novel")
 
     # 환경 변수의 Markdown 폴더 경로 사용
     from src.common.module import get_env_var_w_error
-    with get_env_var_w_error("MARKDOWN_DIR") as (env_md_dir, key_err):
+    with get_env_var_w_error("NOVEL_INFO_MD_DIR") as (env_md_dir, key_err):
         if key_err:
             md_dir = Path(novel_dir, "markdown")
         else:
@@ -457,11 +455,37 @@ def novel_info_main() -> None:
 
     print_under_new_line("[알림] Markdown 파일은", md_dir, "에 쓸게요.")
 
-    # 소설 번호 입력 받기
+    file_name: str = novel.code.zfill(6) + " - " + novel.title.replace("/", "|")
+
+    # 기본 경로: ../novel/markdown/제목.md
+    file_path = Path(md_dir, file_name).with_suffix(".md")
+
+    # Markdown 형식으로 변환하기
+    md_file_content = novel_info_to_md(novel)
+
+    # Markdown 폴더 확보 및 새 파일 열기
+    from src.common.module import opened_x_error
+    with opened_x_error(file_path, "xt", skip=skip) as (f, err):
+        if err:
+            print_under_new_line("[오류]", f"{err = }")
+            print("[오류]", file_path, "파일을 열지 못했어요.")
+        else:
+            # print(md_file_content, file=f)
+            f.write(md_file_content)
+            print_under_new_line("[알림]", file_path, "파일을 작성했어요.")
+
+
+def novel_info_main() -> None:
+    """직접 실행할 때만 호출되는 메인 함수"""
+
     from src.common.userIO import input_num
+
+    # 소설 번호 입력 받기
     code: str = str(input_num("소설 번호"))
 
     from urllib.parse import urljoin
+
+    base_url: str = "https://novelpia.com/novel/"
     url: str = urljoin(base_url, code)  # https://novelpia.com/novel/1
 
     # 소설 페이지 응답 받기
@@ -473,22 +497,8 @@ def novel_info_main() -> None:
     # 소설 정보 추출하기
     novel: Novel = extract_novel_info(html)
 
-    # 기본 경로: ../novel/markdown/제목.md
-    md_file_name = Path(md_dir, novel.title).with_suffix(".md")
-
-    # Markdown 형식으로 변환하기
-    md_file_content = novel_info_to_md(novel)
-
-    # Markdown 폴더 확보 및 새 파일 열기
-    from src.common.module import opened_x_error
-    with opened_x_error(md_file_name, "x") as (f, err):
-        if err:
-            print_under_new_line(f"예외 발생: {err = }")
-        else:
-            # assert f is not None
-            # print(md_file_content, file=f)
-            f.write(md_file_content)
-            print_under_new_line("[알림]", md_file_name, "파일을 작성했어요.")
+    # Markdown 파일 열기
+    novel_to_md_file(novel)
 
 
 if __name__ == "__main__":
