@@ -41,7 +41,7 @@ class Page:
                  url: str = '',
                  ctime: str = '0000-00-00',
                  mtime: str = '0000-00-000',
-                 got_time: str = '',
+                 got_time: str = datetime.today().isoformat(timespec='minutes'),
                  recommend: int = -1,
                  view: int = -1
                  ):
@@ -92,7 +92,7 @@ class Page:
         try:
             domain: str = res.headers.get("Access-Control-Allow-Origin")
         except KeyError as ke:
-            print_under_new_line(f"예외 발생: {ke = }")
+            print_under_new_line("[오류]",  f"{ke = }")
             print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
         else:
             if domain == "https://novelpia.com":
@@ -110,7 +110,7 @@ class Page:
             datetime.fromisoformat(up_date_s)  # up_date_s: "2024-12-13"
         except ValueError as err:
             err.add_note(*err.args)
-            print_under_new_line("예외 발생: " + f"{err = }")
+            print_under_new_line("[오류]", f"{err = }")
             raise
         else:
             self._ctime = up_date_s
@@ -176,8 +176,8 @@ def get_env_var_w_error(env_var_name: str):
         from os import environ
         env_var: str = environ[env_var_name]
     except KeyError as ke:
-        print_under_new_line(f"예외 발생: {ke = }")
-        print(f"환경 변수 '{env_var_name}' 을 찾지 못했어요.")
+        print_under_new_line("[오류]",  f"{ke = }")
+        print(f"[오류] 환경 변수 '{env_var_name}' 을 찾지 못했어요.")
         yield None, ke
     else:
         yield env_var, None
@@ -249,10 +249,10 @@ def get_novel_main_w_error(url: str):
 
     from requests.exceptions import ConnectionError
     from urllib3.exceptions import MaxRetryError
+    from requests import get
 
     # 소설 메인 페이지의 HTML 문서를 요청
     try:
-        from requests import get
         res = get(url=url, headers=headers)  # res: <Response [200]>
 
     # 연결 실패
@@ -309,7 +309,7 @@ def load_json_w_error(res_json: str):
     try:
         dic: dict = loads(res_json)
     except JSONDecodeError as je:
-        print_under_new_line("예외 발생: " + f"{je = }")
+        print_under_new_line("[오류]", f"{je = }")
         je.add_note("응답 JSON: " + res_json)
         yield None, je
     else:
@@ -331,60 +331,73 @@ def extract_alert_msg_w_error(html: str):
 
     # 알림 창이 나오지 않음
     except AttributeError as err:
-        print_under_new_line("예외 발생:", f"{err = }")
+        err.add_note(f"{soup.prettify() = }")
+        print_under_new_line("[오류]", f"{err = }")
         yield None, err
 
     # 알림 추출
     else:
-        alert_msg: str = msg_tag.text
-        """
-        1. 잘못된 소설 번호 입니다. (제목, 줄거리 無)
-        2. 삭제된 소설 입니다. (제목 有, 줄거리 無)
-        3. 잘못된 접근입니다. (제목 有, 줄거리 無)
-        - 연습등록작품은 작가만 열람이 가능
-        - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
-        """
-        if alert_msg == "잘못된 소설 번호 입니다.":
-            pass
+        try:
+            alert_msg: str = msg_tag.text
+            """
+            1. 잘못된 소설 번호 입니다. (제목, 줄거리 無)
+            2. 삭제된 소설 입니다. (제목 有, 줄거리 無)
+            3. 잘못된 접근입니다. (제목 有, 줄거리 無)
+            - 연습등록작품은 작가만 열람이 가능
+            - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
+            """
+        # 메시지 無
+        except AttributeError as err:
+            print_under_new_line("[오류]", f"{err = }")
+            print(f"{msg_tag = }")
 
-        yield alert_msg, None
+            yield None, err
+        else:
+            if alert_msg == "잘못된 소설 번호 입니다.":
+                pass
+            yield alert_msg, None
 
 
 @contextmanager
-def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8"):
+def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", skip: bool = False):
     """입력받은 대로 파일을 열고 파일과 오류 내역을 반환하는 함수
 
     :param file_path: 파일 경로
     :param mode: 파일 모드 (읽기, 쓰기, 붙이기, ..)
     :param encoding: 파일의 인코딩 (기본 UTF-8)
+    :param skip: 동명의 파일 존재 시 건너뛸 지 여부
     """
     assert mode.find("b") == -1
     assure_path_exists(file_path)
     try:
         f = open(file_path, mode, encoding='utf-8')
 
-    # 기존 텍스트 파일을 "xt" 모드로 열 때
+    # 기존 파일을 "xt" 모드로 열었음
     except FileExistsError:
         from time import ctime
         mtime: str = ctime(file_path.stat().st_mtime)
 
-        # 덮어쓸 것인지 질문
-        question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
+        # 덮어 쓸 지 질문
+        if not skip:
+            question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
 
-        from src.common.userIO import input_permission
-        asked_overwrite, can_overwrite = input_permission(question)
+            from src.common.userIO import input_permission
 
-        # 덮어 쓰기
-        if asked_overwrite and can_overwrite:
-            print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
-            with opened_x_error(file_path, "wt", encoding) as (f, err):
-                yield f, err
+            asked_overwrite, can_overwrite = input_permission(question)
+
+            # 덮어 쓰기
+            if asked_overwrite and can_overwrite:
+                print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
+                with opened_x_error(file_path, "wt", encoding, skip) as (f, err):
+                    yield f, err
 
         # 기존 파일 유지
         else:
-            print_under_new_line("[알림] 수집한 정보를 버리고 기존 파일을 유지할게요.")
-            yield None, FileExistsError
+            print_under_new_line("[알림] 이미 동명의 파일이 있어요.")
 
+        yield None, FileExistsError
+
+    # 그 외 파일 입출력 오류
     except OSError as err:
         yield None, err
 
