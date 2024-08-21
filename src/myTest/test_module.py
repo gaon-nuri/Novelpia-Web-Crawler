@@ -86,7 +86,7 @@ class GetNovelMainPage(TestCase):
 
     @skip
     def test_valid_novel_codes(self):
-        for num in range(total_novel_cnt):
+        for num in range(1, total_novel_cnt):
             code = str(num)
             with self.subTest(code=code):
                 url: str = "https://novelpia.com/novel/" + code
