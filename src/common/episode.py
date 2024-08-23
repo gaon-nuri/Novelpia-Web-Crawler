@@ -41,7 +41,7 @@ class Ep(Page):
                  ):
 
         super().__init__(title, code, url, ctime, mtime, got_time, recommend, view)
-        if types is None:
+        if not types:
             types = set()
         self._num = num
         self._types = types
@@ -112,13 +112,13 @@ class Ep(Page):
         self.__set_signed_int("_comment", comment)
 
 
-def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, login: bool = False) -> str:
+def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, plus_login: bool = False) -> str:
     """서버에 회차 목록을 요청하고, 성공 시 HTML 응답을 반환하는 함수
 
     :param novel_code: 소설 번호
     :param sort: "DOWN", 첫화부터 / "UP", 최신화부터
     :param page: 요청할 페이지 번호
-    :param login: 로그인 키 사용 여부 (링크 추출용)
+    :param plus_login: 로그인 키 사용 여부 (링크 추출용)
     :return: 게시일 순으로 정렬된 회차 목록의 한 페이지 (HTML)
     """
     # Chrome DevTools 에서 복사한 POST 요청 URL 및 양식 데이터
@@ -127,9 +127,10 @@ def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, login: bool 
     headers: dict[str: str] = {'User-Agent': ua}
 
     # 요청 헤더에 로그인 키 추가
-    if login:
+    if plus_login:
         from src.common.module import add_login_key
-        login_key, headers = add_login_key(headers)
+
+        login_key, headers = add_login_key(headers, True)
 
     res = post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
     ep_list_html: str = res.text
@@ -137,7 +138,7 @@ def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, login: bool 
     return ep_list_html
 
 
-def get_ep_view_counts(novel_code: str, ep_codes: Generator, ep_count: int) -> list[int] | None:
+def get_ep_view_counts(novel_code: str, ep_codes: Generator, ep_count: int):
     """입력받은 소설의 회차들의 조회수를 응답받아 반환하는 함수
 
     :param novel_code: 소설 번호
@@ -172,23 +173,24 @@ def get_ep_view_counts(novel_code: str, ep_codes: Generator, ep_count: int) -> l
         # 잘못된 요청 URL, 작업(cmd), 헤더
         # JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
         if err:
-            return None
+            yield None
         else:
-            view_cnt_dics = iter(res_dic["list"])
+            view_cnt_dics = res_dic["list"]
 
-    view_counts: list[int] = [-1] * ep_count
+    view_counts: list[int] = []
 
     # 회차별 조회 수 추출
     for i, dic in enumerate(view_cnt_dics):  # dic: {'count_view': '1', 'episode_no': 12606}
-        view_count: str = dic["count_view"]
-        view_counts[i] = int(view_count.replace(",", ""))
+        view_count = int(dic["count_view"].replace(",", ""))
+        view_counts.append(view_count)
 
     # 잘못된 요청 데이터 (ep_codes > episode_arr[], novel_code > novel_no)
-    if view_counts == [-1] * ep_count:
+    if not view_counts:
         print_under_new_line("조회수를 받지 못했어요")
-        return None
 
-    return view_counts
+        yield None
+
+    yield from view_counts
 
 
 def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]):
@@ -229,7 +231,7 @@ def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]):
     yield from ep_tags
 
 
-def get_ep_up_dates(ep_tags: Generator) -> list[str | None] | None:
+def get_ep_up_dates(ep_tags: Generator):
     """목록에서 추출한 회차 Tag 들의 Set 에서 각각의 게시 일자를 추출하여 반환하는 함수
 
     :param ep_tags: 회차 Tag 목록
@@ -309,7 +311,7 @@ def get_ep_up_dates(ep_tags: Generator) -> list[str | None] | None:
 
         ep_up_dates.append(up_date_str)
 
-    return ep_up_dates
+    yield from ep_up_dates
 
 
 def extract_ep_info(list_html: str, ep_no: int = 1):
@@ -322,7 +324,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     ep_tags: Generator = extract_ep_tags(list_html, frozenset({ep_no}))
     ep_tag: Tag = next(ep_tags)
 
-    if ep_tag is None:
+    if not ep_tag:
         return None
 
     # 회차 찾음, Ep 클래스 객체 생성
@@ -339,7 +341,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     span_tags: ResultSet[Tag] | None = headline.select("span.s_inv", limit=2)  # <span class="b_free s_inv">무료</span>
 
     # 예약 회차
-    if span_tags is None:
+    if not span_tags:
         # 회차 번호 추출
         view_tag: Tag = ep_tag.select_one("td.font12")
         click: str = view_tag.attrs["onclick"]  # click: "$('.loads').show();location = '/viewer/3790123';"
@@ -367,7 +369,6 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     # stats.span: <span style="~">EP.0</span>
     ep_num_tag: Tag = stats.select_one("span").extract()
     ep_num: str = ep_num_tag.text  # 'EP.1' / 'BONUS'
-    # print_under_new_line(f"제거: {ep_no_tag = }")
     """
     - 회차 목록 내 추천, 댓글 수 표기 기능이 늦게 나와서 작품 연재 시기에 따라서 회차 화수 표기의 인덱스가 다를 수 있음
     - 추천 수 추가 공지: <2021년 01월 08일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_1392/)>
@@ -382,7 +383,6 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     # 회차 번호 추출
     # <span class="episode_count_view novel_count_view_7146">0</span>
     view_tag: Tag = stats_tag.select_one(".episode_count_view").extract()
-    # print_under_new_line(f"제거: {view_tag = }")
 
     from typing import Iterable
 
@@ -394,15 +394,15 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     ep.code = ep_code
 
     from urllib.parse import urljoin
+
     ep.url = urljoin("https://novelpia.com/viewer/", ep_code)
 
     # 게시/크롤링 일자 추출 및 저장
     ep_tag_gen: Generator = (ep_tag for ep_tag in [ep_tag])
-    ep.ctime = get_ep_up_dates(ep_tag_gen)[0]
+    ep_up_date_gen: Generator = get_ep_up_dates(ep_tag_gen)
+    ep.ctime = next(ep_up_date_gen)
 
-    ep.got_time = datetime.today()
-
-    # 소설 번호 추출r
+    # 소설 번호 추출
     only_link = SoupStrainer("div", {"class": "page-link"})
     link_soup = BeautifulSoup(list_html, parser, parse_only=only_link)
 
@@ -412,11 +412,13 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
 
     # 조회수 추출
     ep_code_gen: Generator = (ep_code for ep_code in [ep_code])
-    view_counts: list[int] | None = get_ep_view_counts(novel_code, ep_code_gen, 1)
+    view_counts: Generator = get_ep_view_counts(novel_code, ep_code_gen, 1)
 
     # 조회수 저장
-    if view_counts is not None:
-        ep.view = view_counts[0]
+    try:
+        ep.view = next(view_counts)
+    except StopIteration as si:
+        print_under_new_line("[오류]", f"{si = }")
 
     def extract_stat(cls_sel: str) -> int | None:
         """CSS 클래스 선택자를 입력받아 수치를 추출하여 반환하는 함수
@@ -431,7 +433,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
             return stat
 
         stat_type: str = cls_sel.lstrip("ion-")
-        stat_name: str | None = None
+        stat_name: str
 
         if stat_type.startswith("doc"):
             stat_name = "글자 수"
@@ -439,10 +441,11 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
             stat_name = "댓글 수"
         elif stat_type.startswith("thumb"):
             stat_name = "추천 수"
-        elif stat_name is None:
+        else:
             stat_name = "선택한 수치"
 
-        print_under_new_line(stat_name + "를 찾지 못했어요")
+        print_under_new_line(stat_name, "를 찾지 못했어요")
+
         return None
 
     # 글자/댓글/추천 수 저장
@@ -470,10 +473,11 @@ def has_prologue(novel_code: str) -> bool:
     - 에필로그 기능은 노벨피아에서 2022년 5월 16일 부로 삭제함.
     - 공지 참고: https://novelpia.com/notice/all/view_1274648/
     """
+
     ep_list_html: str = get_ep_list(novel_code, "DOWN", 1)
     ep = extract_ep_info(ep_list_html, 1)
 
-    return ep is None or ep.num == 0
+    return not ep or ep.num == 0
 
 
 def ep_content_to_md(ep: Ep, ep_lines: list[str]):
