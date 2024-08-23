@@ -34,7 +34,7 @@ class GetEpListAndInfo(TestCase):
         novel_code: str = "0"
         ep_no: int = 16
 
-        html: str = get_ep_list(novel_code)
+        html: str = get_ep_list(novel_code, plus_login=True)
         got_ep: Ep = extract_ep_info(html, ep_no)
 
         ep_code: str = "978"
@@ -61,10 +61,10 @@ class GetEpListAndInfo(TestCase):
 
         :return: 두 Ep 클래스 객체의 str 값이 같으면 성공
         """
-        code: str = "30"
+        novel_code: str = "30"
         ep_no: int = 1
 
-        html: str = get_ep_list(code)
+        html: str = get_ep_list(novel_code, plus_login=True)
         got_ep: Ep = extract_ep_info(html, ep_no)
 
         answer_ep = Ep(
@@ -110,9 +110,9 @@ class GetEpListAndInfo(TestCase):
         """
         code: str = "2"
         html: str = get_ep_list(code)
-        info_dic: dict = extract_ep_info(html, 1)
+        ep: Ep = extract_ep_info(html, 1)
 
-        self.assertIsNone(info_dic)
+        self.assertIsNone(ep)
 
 
 @skip
@@ -147,12 +147,12 @@ class GetNovelUpDate(TestCase):
             exit("[오류] " + f"{err = }")
 
         ep_tag_gen: Generator = (ep_tag for ep_tag in [ep_tag])
-        up_dates: list[str] | None = get_ep_up_dates(ep_tag_gen)
+        up_dates: Generator = get_ep_up_dates(ep_tag_gen)
 
-        if up_dates is None:
+        if not up_dates:
             return None
         else:
-            return up_dates[0]
+            return next(up_dates)
 
     def test_single_ep(self):
         code: str = "124146"  # <연중용 나데나데 소설>
