@@ -217,18 +217,19 @@ def get_novel_up_dates(code: str, sort: str) -> str:
 
 @contextmanager
 def chk_novel_status(novel: Novel, html: str):
-    """파싱된 소설 페이지에서 추출한 소설 정보를 담은 Dict를 반환하는 함수
+    """소설 페이지에서 추출한 정보와 발생한 오류를 반환하는 함수
 
-    :param novel: 소설 정보가 담긴 Novel 클래스 객체
+    :param novel: 소설 정보가 담긴 Novel 인스턴스
     :param html: 소설 페이지 HTML
-    :return: 소설 정보가 담긴 Dict
+    :return: Novel/BeautifulSoup 클래스 객체와 오류
     """
     # 페이지 제목 추출
     only_title = Strainer("title")
     title_soup = Soup(html, parser, parse_only=only_title)
 
     # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
-    html_title: str = title_soup.text[22:]
+    prefix: str = '노벨피아 - 웹소설로 꿈꾸는 세상! - '
+    html_title: str = title_soup.text[len(prefix):]
     """
     - 브라우저 상에 제목표시줄에 페이지 위치나 소설명이 표기됨.
     - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
@@ -291,7 +292,7 @@ def extract_novel_info(html: str) -> Novel:
     """입력받은 소설의 메인 페이지 HTML에서 정보를 추출하여 반환하는 함수
 
     :param html: 소설 정보를 추출할 HTML
-    :return: 소설 제목, 추출한 정보가 담긴 Dict
+    :return: 추출한 정보가 담긴 Novel 인스턴스
     """
     novel = Novel()
     # print_under_new_line(novel)
@@ -334,7 +335,10 @@ def extract_novel_info(html: str) -> Novel:
 
     # 연재 유형(자유/PLUS), 청불/독점작/챌린지/연중(및 지연)/완결 여부
     badge_tag: Tag = info_soup.select_one("p.in-badge")
-    flag_list: list[str] = [badge.text for badge in badge_tag.select("span")]
+    from typing import Generator
+
+    flag_list: Generator = (badge.text for badge in badge_tag.select("span"))
+    novel.status = "연재 중"
 
     for flag in flag_list:
         if flag in ["19", "자유", "독점", "챌린지"]:
@@ -343,8 +347,6 @@ def extract_novel_info(html: str) -> Novel:
             novel.types.add(flag)
         elif flag in ["삭제", "완결", "연재지연", "연재중단"]:
             novel.status = flag
-        else:
-            novel.status = "연재 중"
 
     # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
     tag_set = info_soup.select("p.writer-tag span.tag")
@@ -354,11 +356,10 @@ def extract_novel_info(html: str) -> Novel:
     - 최소 해시태그 추가 공지: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
     - 모바일 태그 표기 공지: <2021년 01월 14일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4783/)>
     """
-
-    # PC, 모바일 중복 해시태그 제거
-    indices = int(len(tag_set) / 2)  # indices: 3
+    indices = int(len(tag_set) / 2)  # PC, 모바일 중복 해시 태그 제거
     hash_tags: list[str] = [i.string.lstrip("#") for i in tag_set[:indices]]  # ['판타지','현대', '하렘']
 
+    # 해시 태그 저장
     novel.tags = hash_tags
 
     # 조회, 추천수 추출
@@ -387,6 +388,7 @@ def extract_novel_info(html: str) -> Novel:
     # 프롤로그 존재 시 회차 수 1 가산
     # EP.0 ~ EP.10 이면 10회차로 나오니 총 회차 수는 여기에 1을 더해야 함
     from src.common.episode import has_prologue
+
     if has_prologue(novel_code):
         pro_user_stats[2] += 1
 
@@ -403,7 +405,7 @@ def extract_novel_info(html: str) -> Novel:
 def novel_info_to_md(novel: Novel) -> str:
     """추출한 소설 정보를 Markdown 문서로 변환하는 함수
     
-    :param novel: 소설 정보가 담긴 객체
+    :param novel: 소설 정보가 담긴 Novel 인스턴스
     :return: Markdown 문서
     """
     print_under_new_line(f"[알림] {novel.title}.md 파일에 '유입 경로' 속성을 추가했어요. Obsidian 으로 직접 수정해 주세요.")
@@ -412,6 +414,9 @@ def novel_info_to_md(novel: Novel) -> str:
     if novel.status == "삭제":
         return "삭제"
 
+    type_bools: list[str] = [type + ": True" for type in novel.types]
+    types: str = "\n".join(type_bools)
+
     # 소설 서비스 상태 정상, Markdown 작성
     lines: list[str] = [
         "aliases:\n  - (직접 적어 주세요)",
@@ -419,22 +424,26 @@ def novel_info_to_md(novel: Novel) -> str:
         "작가명: " + novel.writer_name,
         "소설 링크: " + novel.url,
         "tags:" + novel.tags,
+        types
+    ]
+    dates: list[str] = [
         "완독일: 0000-00-00",
         "연재 시작일: " + novel.ctime,
         "최근(예정) 연재일: " + novel.mtime,
         "정보 수집일: " + novel.got_time,
-        "회차 수: " + str(novel.ep),
-        "알람 수: " + str(novel.alarm),
-        "선호 수: " + str(novel.prefer),
-        "추천 수: " + str(novel.recommend),
-        "조회 수: " + str(novel.view)
     ]
-
-    lines = ["---"] + lines
+    stats: list[str] = [
+        f"회차 수: {novel.ep}",
+        f"알람 수: {novel.alarm}",
+        f"선호 수: {novel.prefer}",
+        f"추천 수: {novel.recommend}",
+        f"조회 수: {novel.view}",
+    ]
+    lines = ["---"] + lines + dates + stats
     lines.append("---")
 
     summary_callout: str = novel.synopsis
-    if summary_callout is not None:
+    if not summary_callout:
         lines.append(summary_callout)
 
     md_string: str = "\n".join(lines)
@@ -443,22 +452,30 @@ def novel_info_to_md(novel: Novel) -> str:
 
 
 def novel_to_md_file(novel: Novel, skip: bool = False):
-    novel_dir = Path(Path.cwd(), "novel")
+    """입력받은 소설 정보를 파일에 쓰는 함수
 
-    # 환경 변수의 Markdown 폴더 경로 사용
+    :param novel: 소설 정보가 담긴 Novel 인스턴스
+    :param skip: 덮어 쓰기 질문을 건너뛸 지 여부
+    """
     from src.common.module import get_env_var_w_error
+
     with get_env_var_w_error("NOVEL_INFO_MD_DIR") as (env_md_dir, key_err):
+        # 환경 변수 無
         if key_err:
+            novel_dir = Path(Path.cwd(), "novel")
             md_dir = Path(novel_dir, "markdown")
+
+        # 환경 변수의 Markdown 폴더 경로 사용
         else:
-            md_dir: Path = Path(env_md_dir)
+            md_dir: Path = Path(env_md_dir, "소설 정보")
 
     print_under_new_line("[알림] Markdown 파일은", md_dir, "에 쓸게요.")
 
-    file_name: str = novel.code.zfill(6) + " - " + novel.title.replace("/", "|")
+    hardened_title: str = novel.title.replace("/", "|")  # 제목의 "/"로 인한 폴더 생성 방지
+    padded_code: str = novel.code.zfill(6)  # 노벨피아 총 소설 수는 약 30만 개 (6자리)
+    file_name: str = padded_code + " - " + hardened_title  # '6자리 번호 - 제목'
 
-    # 기본 경로: ../novel/markdown/제목.md
-    file_path = Path(md_dir, file_name).with_suffix(".md")
+    file_path = Path(md_dir, file_name).with_suffix(".md")  # 기본 경로: ../novel/markdown/제목.md
 
     # Markdown 형식으로 변환하기
     md_file_content = novel_info_to_md(novel)
@@ -472,12 +489,11 @@ def novel_to_md_file(novel: Novel, skip: bool = False):
         else:
             # print(md_file_content, file=f)
             f.write(md_file_content)
-            print_under_new_line("[알림]", file_path, "파일을 작성했어요.")
+            print("[알림]", file_path, "파일을 썼어요.")
 
 
 def novel_info_main() -> None:
     """직접 실행할 때만 호출되는 메인 함수"""
-
     from src.common.userIO import input_num
 
     # 소설 번호 입력 받기
