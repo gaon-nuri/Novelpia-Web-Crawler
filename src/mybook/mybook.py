@@ -12,8 +12,9 @@ def get_mybook_page_w_err(url: str):
     """
     from src.common.module import ua, add_login_key
 
+    # 구독 계정으로 로그인
     headers: dict = {'User-Agent': ua}
-    npd_cookie, headers = add_login_key(headers)
+    npd_cookie, headers = add_login_key(headers, plus=True)
 
     from requests.exceptions import ConnectionError
     from urllib3.exceptions import MaxRetryError
@@ -24,7 +25,7 @@ def get_mybook_page_w_err(url: str):
 
         res = get(url=url, headers=headers)  # res: <Response [200]>
 
-    # 연결 실패
+    # 연결 실패, 오류 메시지 추출
     except* ConnectionError as err_group:
         ce: ConnectionError = err_group.exceptions[0]
         mre: MaxRetryError = ce.args[0]
@@ -46,6 +47,10 @@ def get_mybook_page_w_err(url: str):
 
 
 def extract_my_books(html: str):
+    """내 서재 페이지에서 링크가 담긴 HTML 태그를 추출하는 함수
+
+    :param html: 내 서재 페이지 HTML
+    """
     # HTML 응답 파싱
     from src.common.module import parser
     from bs4 import BeautifulSoup as Soup
