@@ -204,7 +204,7 @@ tags:
                         from src.metadata.novel_info import Novel, extract_novel_info, novel_to_md_file
 
                         novel: Novel = extract_novel_info(html)
-                        if novel is None:
+                        if not novel:
                             self.fail()
                         novel_to_md_file(novel, True)
                 self.assertTrue(True)

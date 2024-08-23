@@ -31,7 +31,7 @@ def chk_str_type(in_str: str, check_type: type = str) -> bool:
         # 해당 형식으로 변환할 수 없는 문자열
         except ValueError as ve:
             ve.add_note("args: " + ', '.join(map(str, ve.args)))
-            print_under_new_line("[오류]",  f"{ve = }")
+            print_under_new_line("[오류]", f"{ve = }")
             return False
 
 
@@ -40,7 +40,7 @@ def input_permission(question: str, condition: bool = True) -> (bool, bool):
 
     :param question: 사용자에게 물어볼 질문
     :param condition: 질문 여부를 결정하는 진리값
-    :return:(질문 여부 = 항상 True, 동의 여부 - True/False)
+    :return: (질문 여부 = 항상 True, 동의 여부 - True/False)
     """
     while condition:
         # 질문을 하고 답변을 Y, y, N, n 중 하나로 받음
