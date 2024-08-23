@@ -92,7 +92,7 @@ class Page:
         try:
             domain: str = res.headers.get("Access-Control-Allow-Origin")
         except KeyError as ke:
-            print_under_new_line("[오류]",  f"{ke = }")
+            print_under_new_line("[오류]", f"{ke = }")
             print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
         else:
             if domain == "https://novelpia.com":
@@ -140,7 +140,7 @@ class Page:
             print(*vals, "중에서 선택해 주세요.")
 
     def set_signed_int(self, key: str, val: int):
-        if val is None:
+        if not val:
             self.__setattr__(key, -1)
         elif val >= 0:
             self.__setattr__(key, val)
@@ -176,22 +176,28 @@ def get_env_var_w_error(env_var_name: str):
         from os import environ
         env_var: str = environ[env_var_name]
     except KeyError as ke:
-        print_under_new_line("[오류]",  f"{ke = }")
+        print_under_new_line("[오류]", f"{ke = }")
         print(f"[오류] 환경 변수 '{env_var_name}' 을 찾지 못했어요.")
         yield None, ke
     else:
         yield env_var, None
 
 
-def add_login_key(headers: dict[str: str]) -> tuple[str, dict]:
+def add_login_key(headers: dict[str: str], plus: bool = False) -> tuple[str, dict]:
     """입력받은 헤더에 로그인 키를 추가해서 반환하는 함수
 
     :param headers: 로그인 키를 추가할 헤더
+    :param plus: 구독 계정 사용 여부
     :return: 추가한 로그인 키, 새 헤더
     """
-    with get_env_var_w_error("LOGINKEY") as (login_key, ke):
-        if login_key is None:
-            print_under_new_line("로그인 없이 진행할게요.")
+    env_var_name: str = "LOGINKEY"
+
+    if plus:
+        env_var_name += "_PLUS"
+
+    with get_env_var_w_error(env_var_name) as (login_key, ke):
+        if ke:
+            print("로그인 없이 진행할게요.")
         else:
             cookie: str = "LOGINKEY=" + login_key
             headers["Cookie"] = cookie
@@ -264,15 +270,15 @@ def get_novel_main_w_error(url: str):
         start_index: int = err_msg.find("Failed")
         end_index: int = err_msg.find("Errno")
 
-        re = RuntimeError(err_msg[start_index: end_index - 3])
+        ce = ConnectionError(err_msg[start_index: end_index - 3])
 
-        yield None, re
+        yield None, ce
         # raise re from err_group
 
     # 성공
     else:
         html: str = res.text
-        # assert html != "", "빈 HTML"
+
         yield html, None
 
 
@@ -407,6 +413,7 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
             yield f, None
         finally:
             f.close()
+            print("[알림]", file_path, "파일을 닫았어요.")
 
 
 if __name__ == "__main__":
