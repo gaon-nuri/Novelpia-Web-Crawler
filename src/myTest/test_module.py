@@ -4,7 +4,7 @@ from unittest import TestCase, main, skip
 
 from src.common.module import *
 
-total_novel_cnt: int = 298766  # 노벨피아 소설 수 (2024-08-20 00:41 기준)
+total_novel_cnt: int = 299487  # 노벨피아 소설 수 (2024-08-23 21:36 기준)
 
 
 class TestGetEnvVar(TestCase):
