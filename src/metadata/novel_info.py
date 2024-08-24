@@ -209,8 +209,8 @@ def get_novel_up_dates(code: str, sort: str) -> str:
     from typing import Generator
 
     ep_tags: Generator = extract_ep_tags(ep_li_html, frozenset([1]))
-    up_dates: list[str] | None = get_ep_up_dates(ep_tags)
-    up_date: str = up_dates[0]
+    up_dates: Generator[str] | None = get_ep_up_dates(ep_tags)
+    up_date: str = next(up_dates)
 
     return up_date
 
