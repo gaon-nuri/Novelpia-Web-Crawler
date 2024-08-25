@@ -1,15 +1,27 @@
 from unittest import TestCase, main, skip
 
-from src.myTest.test_module import total_novel_cnt  # 노벨피아 총 소설 수
+from src.common.const import NOVEL_STATUSES_NAMED_TUPLE as STATUSES
+
+
+class ChkMetaClass(TestCase):
+    def test_inherit_user_meta_class(self):
+        """Novel 클래스의 사용자 메타 클래스 상속 여부 테스트"""
+
+        from src.common.module import UserMeta, print_under_new_line
+        from src.novel_info import Novel
+
+        print_under_new_line("Novel.mro():", Novel.mro())
+
+        self.assertTrue(isinstance(Novel, UserMeta))
 
 
 class GetFinalJamo(TestCase):
+    from src.common.const import POSTPOSITIONS_NAMED_TUPLE
+
     ko_word_v_end: str = "창작물 속으로"
     ko_word_c_end: str = "매도당하고 싶은 엘프님"
 
-    vowel_post: list = ["가", "를", "는", "야"]
-    consonant_post: list = ["이", "을", "은", "아"]
-    input_post: list = ["이", "을", "은", "아"]
+    input_post: tuple = POSTPOSITIONS_NAMED_TUPLE.consonant
 
     from src.common.module import get_postposition
 
@@ -18,19 +30,19 @@ class GetFinalJamo(TestCase):
         return GetFinalJamo.get_postposition(kr_word, postposition)
 
     def test_final_consonant_word(self):
-        word: str = GetFinalJamo.ko_word_c_end
-        args: list = GetFinalJamo.input_post
-        answer_post = list(map(self.get_josa, [word] * 4, args))
+        word: str = self.ko_word_c_end
+        args: tuple = self.input_post
+        answer_post = tuple(map(GetFinalJamo.get_josa, [word] * 4, args))
 
-        self.assertEqual(answer_post, GetFinalJamo.consonant_post)
+        self.assertEqual(answer_post, GetFinalJamo.POSTPOSITIONS_NAMED_TUPLE.consonant)
 
     def test_final_vowel_word(self):
-        word: str = GetFinalJamo.ko_word_v_end
-        args: list = GetFinalJamo.input_post
+        word: str = self.ko_word_v_end
+        args: tuple = self.input_post
 
-        answer_post = list(map(self.get_josa, [word] * 4, args))
+        answer_post = tuple(map(self.get_josa, [word] * 4, args))
 
-        self.assertEqual(answer_post, GetFinalJamo.vowel_post)
+        self.assertEqual(answer_post, self.POSTPOSITIONS_NAMED_TUPLE.vowel)
 
 
 class GetNovelStatus(TestCase):
@@ -51,7 +63,7 @@ class GetNovelStatus(TestCase):
             if err:
                 raise err
 
-        from src.metadata.novel_info import Novel, extract_novel_info
+        from src.novel_info import Novel, extract_novel_info
         novel: Novel = extract_novel_info(html)
 
         return novel.status
@@ -60,57 +72,57 @@ class GetNovelStatus(TestCase):
         code_inaccessible: str = "28"  #
         status: str = self.chk_up_status(code_inaccessible)
 
-        self.assertEqual("연습작품", status)
+        self.assertEqual(STATUSES.draft, status)
 
     def test_deleted_novel(self):
         code_deleted: str = "2"  # <건물주 아들> - 최초의 삭제작
         status: str = self.chk_up_status(code_deleted)
 
-        self.assertEqual("삭제", status)
+        self.assertEqual(STATUSES.deleted, status)
 
     def test_novel_on_hiatus(self):
         code_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
         status: str = self.chk_up_status(code_hiatus)
 
-        self.assertEqual("연재중단", status)
+        self.assertEqual(STATUSES.hiatus, status)
 
     def test_completed_novel(self):
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
         status: str = self.chk_up_status(code_completed)
 
-        self.assertEqual("완결", status)
+        self.assertEqual(STATUSES.complete, status)
 
     def test_ongoing_novel(self):
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
         status: str = self.chk_up_status(code_ongoing)
 
-        self.assertEqual("연재 중", status)
+        self.assertEqual(STATUSES.ongoing, status)
 
 
 @skip
 class CntNovelInStatus(GetNovelStatus):
     """특정 연재 상태의 소설 비율을 재는 테스트"""
 
+    from src.common.const import TOTAL_NOVEL_COUNT  # 노벨피아 총 소설 수
+
     @staticmethod
     def chk_up_status(novel_code: str):
         return GetNovelStatus.chk_up_status(novel_code)
 
     def test_cnt_novel_on_hiatus(self):
-        """
-        연중작 비율을 재는 테스트
-        """
-        for num in range(1, total_novel_cnt):
+        """연중작 비율을 재는 테스트"""
+
+        for num in range(1, self.TOTAL_NOVEL_COUNT):
             code = str(num)
             with self.subTest(code=code):
                 up_status: str = self.chk_up_status(code)
 
-                self.assertTrue(up_status == "연재지연" or up_status == "연재중단")
+                self.assertTrue(up_status == STATUSES.delayed or up_status == STATUSES.hiatus)
 
     def test_cnt_deleted_novel(self, status: str = "삭제"):
-        """
-        삭제작 비율을 재는 테스트
-        """
-        for num in range(1, total_novel_cnt):
+        """삭제작 비율을 재는 테스트"""
+
+        for num in range(1, self.TOTAL_NOVEL_COUNT):
             code = str(num)
             with self.subTest(code=code):
                 up_status: str = self.chk_up_status(code)
@@ -119,7 +131,7 @@ class CntNovelInStatus(GetNovelStatus):
 
 
 class NovelToMdFile(TestCase):
-    from src.metadata.novel_info import Novel
+    from src.novel_info import Novel
 
     novel = Novel(
         '숨겨진 흑막이 되었다',
@@ -145,9 +157,10 @@ class NovelToMdFile(TestCase):
 
         :return: Markdown 형식의 소설 정보
         """
-        from src.metadata.novel_info import novel_info_to_md
+        from datetime import datetime
+        from src.novel_info import novel_info_to_md
 
-        formatted_md: str = """---
+        formatted_md: str = f"""---
 aliases:
   - (직접 적어 주세요)
 유입 경로: (직접 적어 주세요)
@@ -158,10 +171,11 @@ tags:
   - 하렘
   - 괴담
   - 집착
+독점: True
 완독일: 0000-00-00
 연재 시작일: 2023-12-11
 최근(예정) 연재일: 2024-04-18
-정보 수집일: 0000-00-00
+정보 수집일: {datetime.today().isoformat(timespec='minutes')}
 회차 수: 225
 알람 수: 1142
 선호 수: 14616
@@ -172,28 +186,28 @@ tags:
 > 괴담, 저주, 여학생 등….
 > 집착해선 안 될 것들이 내게 집착한다
 """
-        converted_md = novel_info_to_md(NovelToMdFile.novel)
+        converted_md = novel_info_to_md(self.novel)
 
         self.assertEqual(formatted_md, converted_md)
 
     @skip
     def test_novel_to_md_file(self):
-        from src.metadata.novel_info import novel_to_md_file
+        from src.novel_info import novel_to_md_file
 
         novel_to_md_file(NovelToMdFile.novel)
 
         self.fail()
 
     def test_novels_to_md_files(self):
-        from src.myTest.test_module import total_novel_cnt
         from src.common.module import get_novel_main_w_error, print_under_new_line
+        from src.common.const import TOTAL_NOVEL_COUNT  # 노벨피아 총 소설 수
 
         from urllib.parse import urljoin
 
         base_url: str = "https://novelpia.com/novel/"
-        urls = (urljoin(base_url, str(code)) for code in range(1, total_novel_cnt))
+        urls = (urljoin(base_url, str(code)) for code in range(1, TOTAL_NOVEL_COUNT))
 
-        for i in range(1, total_novel_cnt):
+        while True:
             url = next(urls)
             with self.subTest(url=url):
                 with get_novel_main_w_error(url) as (html, err):
@@ -201,7 +215,7 @@ tags:
                         print_under_new_line("[오류]", f"{err = }")
                         self.fail()
                     else:
-                        from src.metadata.novel_info import Novel, extract_novel_info, novel_to_md_file
+                        from src.novel_info import Novel, extract_novel_info, novel_to_md_file
 
                         novel: Novel = extract_novel_info(html)
                         if not novel:
