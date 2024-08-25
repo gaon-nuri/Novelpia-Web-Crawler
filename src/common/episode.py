@@ -1,12 +1,14 @@
 from datetime import datetime
 from typing import Generator
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet, Tag
 from bs4.filter import SoupStrainer
 from requests import post
 
-from src.common.module import Page, parser, ua
+from src.common.const import DEFAULT_TIME, EP_TYPES_NAMED_TUPLE, HOST
+from src.common.module import PARSER, Page, UA
 from src.common.userIO import print_under_new_line
 
 
@@ -29,9 +31,9 @@ class Ep(Page):
                  title: str = '',
                  code: str = '',
                  url: str = '',
-                 ctime: str = '0000-00-00',
-                 mtime: str = '0000-00-00',
-                 got_time: str = '0000-00-00',
+                 ctime: str = DEFAULT_TIME,
+                 mtime: str = DEFAULT_TIME,
+                 got_time: str = DEFAULT_TIME,
                  recommend: int = -1,
                  view: int = -1,
                  types: set[str] = None,
@@ -69,7 +71,7 @@ class Ep(Page):
 
     @types.setter
     def types(self, type: str):
-        all_types = frozenset(["자유", "PLUS", "성인"])
+        all_types = frozenset(EP_TYPES_NAMED_TUPLE)
         self.__add_one_from("_types", type, all_types)
 
     @property
@@ -122,14 +124,14 @@ def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, plus_login: 
     :return: 게시일 순으로 정렬된 회차 목록의 한 페이지 (HTML)
     """
     # Chrome DevTools 에서 복사한 POST 요청 URL 및 양식 데이터
-    req_url: str = "https://novelpia.com/proc/episode_list"
+    req_url: str = urljoin(HOST, "/proc/episode_list")
     form_data: dict = {"novel_no": novel_code, "sort": sort, "page": page - 1}  # 1페이지 -> page = 0, ...
-    headers: dict[str: str] = {'User-Agent': ua}
+    headers: dict[str: str] = {'User-Agent': UA}
 
-    # 요청 헤더에 로그인 키 추가
     if plus_login:
         from src.common.module import add_login_key
 
+        # 요청 헤더에 로그인 키 추가
         login_key, headers = add_login_key(headers, True)
 
     res = post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
@@ -146,13 +148,13 @@ def get_ep_view_counts(novel_code: str, ep_codes: Generator, ep_count: int):
     :param ep_count: 회차의 수
     :return: 조회수 목록
     """
-    url: str = "https://novelpia.com/proc/novel"
+    url: str = urljoin(HOST, "/proc/novel")
     form_data: dict = {
         "cmd": "get_episode_count_view",
         "episode_arr[]": ["episode_count_view novel_count_view_"] * ep_count,
         "novel_no": novel_code,
     }
-    headers: dict = {"User-Agent": ua}
+    headers: dict = {"User-Agent": UA}
 
     for i, code in enumerate(ep_codes):
         form_data["episode_arr[]"][i] += code
@@ -200,9 +202,11 @@ def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]):
     :param ep_num_queue: 태그를 추출할 회차 서수의 집합
     :return: 회차 태그의 집합
     """
+    from src.common.selector import EP_TABLE_CSS
+
     # 회차 Table 추출
-    only_ep = SoupStrainer("table", {"class": "s_inv"})
-    soup = BeautifulSoup(list_html, parser, parse_only=only_ep)
+    only_ep = SoupStrainer("table", {"class": EP_TABLE_CSS})
+    soup = BeautifulSoup(list_html, PARSER, parse_only=only_ep)
 
     # 작성된 회차 無
     if len(soup.contents) == 0:
@@ -210,8 +214,10 @@ def extract_ep_tags(list_html: str, ep_num_queue: frozenset[int]):
 
         yield None
 
+    from src.common.selector import EP_TAGS_CSS
+
     # 회차 Tag 목록 추출
-    ep_tags: ResultSet[Tag] = soup.select("tr.ep_style5", limit=20)
+    ep_tags: ResultSet[Tag] = soup.select(EP_TAGS_CSS, limit=20)
 
     for ep_num in ep_num_queue:
         assert ep_num > 0, "잘못된 회차 서수"
@@ -337,15 +343,19 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     title: str = headline.select_one("i").next.text  # '001. 능력 각성'
     ep.title = title
 
+    from src.common.selector import EP_TYPES_CSS
+
     # 유형 추출
-    span_tags: ResultSet[Tag] | None = headline.select("span.s_inv", limit=2)  # <span class="b_free s_inv">무료</span>
+    span_tags: ResultSet[Tag] | None = headline.select(EP_TYPES_CSS, limit=2)  # <span class="b_free s_inv">무료</span>
 
     # 예약 회차
     if not span_tags:
+        from src.common.selector import EP_VIEW_CSS
+
         # 회차 번호 추출
-        view_tag: Tag = ep_tag.select_one("td.font12")
+        view_tag: Tag = ep_tag.select_one(EP_VIEW_CSS)
         click: str = view_tag.attrs["onclick"]  # click: "$('.loads').show();location = '/viewer/3790123';"
-        start_index: int = click.find("viewer") + 7
+        start_index: int = click.find("viewer") + len("viewer") + 1
         ep_code: str = click[start_index: -2]
 
         # 회차 번호 저장
@@ -354,16 +364,19 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
         return ep
 
     types = (tag.attrs['class'][0] for tag in span_tags)  # ['b_free', 's_inv']
+    from src.common.const import EP_TYPES_NAMED_TUPLE
 
     # 유형 저장
     if 'b_free' in types:
-        ep.types.add("자유")
+        ep.types.add(EP_TYPES_NAMED_TUPLE.free)
 
     if 'b_19' in types:
-        ep.types.add("성인")
+        ep.types.add(EP_TYPES_NAMED_TUPLE.adult)
+
+    from src.common.selector import EP_STATS_CSS
 
     # 각종 정보 추출
-    stats: Tag = ep_tag.select_one("div.ep_style2 font")
+    stats: Tag = ep_tag.select_one(EP_STATS_CSS)
 
     # 회차 화수 표기 추출
     # stats.span: <span style="~">EP.0</span>
@@ -382,7 +395,9 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
 
     # 회차 번호 추출
     # <span class="episode_count_view novel_count_view_7146">0</span>
-    view_tag: Tag = stats_tag.select_one(".episode_count_view").extract()
+    from src.common.selector import EP_VIEW_COUNT_CSS
+
+    view_tag: Tag = stats_tag.select_one(EP_VIEW_COUNT_CSS).extract()
 
     from typing import Iterable
 
@@ -393,9 +408,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     # 회차 번호 및 URL 저장
     ep.code = ep_code
 
-    from urllib.parse import urljoin
-
-    ep.url = urljoin("https://novelpia.com/viewer/", ep_code)
+    viewer_url: str = urljoin(HOST, "/viewer")
+    ep.url = urljoin(viewer_url, ep_code)
 
     # 게시/크롤링 일자 추출 및 저장
     ep_tag_gen: Generator = (ep_tag for ep_tag in [ep_tag])
@@ -403,12 +417,14 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
     ep.ctime = next(ep_up_date_gen)
 
     # 소설 번호 추출
-    only_link = SoupStrainer("div", {"class": "page-link"})
-    link_soup = BeautifulSoup(list_html, parser, parse_only=only_link)
+    from src.common.selector import EP_LINK_CSS
 
-    page_link_tag: Tag = link_soup.select_one(".page-link")
+    only_link = SoupStrainer("div", {"class": EP_LINK_CSS.lstrip(".")})
+    link_soup = BeautifulSoup(list_html, PARSER, parse_only=only_link)
+
+    page_link_tag: Tag = link_soup.select_one(EP_LINK_CSS)
     click: str = page_link_tag.attrs["onclick"]  # "localStorage['novel_page_15597'] = '1'; episode_list();"
-    novel_code: str = click[click.find("page") + 5: click.find("]") - 1]
+    novel_code: str = click[click.find("page") + len("page") + 1: click.find("]") - 1]
 
     # 조회수 추출
     ep_code_gen: Generator = (ep_code for ep_code in [ep_code])
@@ -419,6 +435,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
         ep.view = next(view_counts)
     except StopIteration as si:
         print_under_new_line("[오류]", f"{si = }")
+
+    from src.common.selector import EP_LETTER_COUNT_CSS, EP_COMMENT_COUNT_CSS, EP_RECOMMEND_COUNT_CSS
 
     def extract_stat(cls_sel: str) -> int | None:
         """CSS 클래스 선택자를 입력받아 수치를 추출하여 반환하는 함수
@@ -432,14 +450,13 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
             stat = int(stat_tag.next.strip().replace(",", ""))
             return stat
 
-        stat_type: str = cls_sel.lstrip("ion-")
         stat_name: str
 
-        if stat_type.startswith("doc"):
+        if cls_sel == EP_LETTER_COUNT_CSS:
             stat_name = "글자 수"
-        elif stat_type.startswith("chat"):
+        elif cls_sel == EP_COMMENT_COUNT_CSS:
             stat_name = "댓글 수"
-        elif stat_type.startswith("thumb"):
+        elif cls_sel == EP_RECOMMEND_COUNT_CSS:
             stat_name = "추천 수"
         else:
             stat_name = "선택한 수치"
@@ -449,11 +466,7 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
         return None
 
     # 글자/댓글/추천 수 저장
-    ep.letter, ep.comment, ep.recommend = map(extract_stat, [
-        "ion-document-text",  # 글자 수
-        "ion-chatbox-working",  # 댓글 수
-        "ion-thumbsup",  # 추천 수
-    ])
+    ep.letter, ep.comment, ep.recommend = map(extract_stat, [EP_LETTER_COUNT_CSS, EP_COMMENT_COUNT_CSS, EP_RECOMMEND_COUNT_CSS])
     """
     노벨피아 글자 수 기준은 공백 문자 및 일부 문장 부호 제외.
     공지 참고: https://novelpia.com/faq/all/view_383218/
