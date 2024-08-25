@@ -2,18 +2,16 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from src.common.userIO import print_under_new_line
-
-# Windows Chrome User-Agent String
-ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
-
-# bs4 용 파이썬 내장 파서
-parser = "html.parser"
+from .const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER, UA
+from .userIO import print_under_new_line
 
 
-class Page:
-    """
-    노벨피아 웹 페이지 클래스.
+class UserMeta(type):
+    pass
+
+
+class Page(metaclass=UserMeta):
+    """노벨피아 웹 페이지 클래스.
 
     :var _title: 제목
     :var _code: 고유 번호
@@ -39,8 +37,8 @@ class Page:
                  title: str = '',
                  code: str = '',
                  url: str = '',
-                 ctime: str = '0000-00-00',
-                 mtime: str = '0000-00-000',
+                 ctime: str = DEFAULT_TIME,
+                 mtime: str = DEFAULT_TIME,
                  got_time: str = datetime.today().isoformat(timespec='minutes'),
                  recommend: int = -1,
                  view: int = -1
@@ -88,14 +86,16 @@ class Page:
     @url.setter
     def url(self, url: str):
         from requests import get, Response
-        res: Response = get(url, headers={"User-Agent": ua})
+        res: Response = get(url, headers={"User-Agent": UA})
         try:
             domain: str = res.headers.get("Access-Control-Allow-Origin")
         except KeyError as ke:
             print_under_new_line("[오류]", f"{ke = }")
             print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
         else:
-            if domain == "https://novelpia.com":
+            from src.common.const import HOST
+
+            if domain == HOST:
                 self._url = url
             else:
                 print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
@@ -190,7 +190,7 @@ def add_login_key(headers: dict[str: str], plus: bool = False) -> tuple[str, dic
     :param plus: 구독 계정 사용 여부
     :return: 추가한 로그인 키, 새 헤더
     """
-    env_var_name: str = "LOGINKEY"
+    env_var_name: str = LOGIN_KEY_NAME
 
     if plus:
         env_var_name += "_PLUS"
@@ -212,6 +212,7 @@ def add_npd_cookie(headers: dict[str: str]) -> tuple[str, dict]:
     :return: 추가한 Cookie, 새 헤더
     """
     from datetime import date
+
     day_str: str = date.today().strftime("%d%m1")  # 8월 15일 -> 15081
     cookie: str = "NPD" + day_str + "=meta;"
     headers["Cookie"] = cookie
@@ -250,19 +251,20 @@ def get_novel_main_w_error(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    headers: dict = {'User-Agent': ua}
+    headers: dict = {'User-Agent': UA}
     npd_cookie, headers = add_npd_cookie(headers)
 
     from requests.exceptions import ConnectionError
     from urllib3.exceptions import MaxRetryError
     from requests import get
 
-    # 소설 메인 페이지의 HTML 문서를 요청
     try:
+        # 소설 메인 페이지의 HTML 문서를 요청
         res = get(url=url, headers=headers)  # res: <Response [200]>
 
     # 연결 실패
     except* ConnectionError as err_group:
+        # 오류 메시지 추출
         ce: ConnectionError = err_group.exceptions[0]
         mre: MaxRetryError = ce.args[0]
         err_msg: str = mre.reason.args[0]
@@ -294,10 +296,9 @@ def get_postposition(kr_word: str, postposition: str) -> str:
     한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
     참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
     """
-    v_post: tuple = ("가", "를", "는", "야")
-    c_post: tuple = ("이", "을", "은", "아")
+    from src.common.const import POSTPOSITIONS_NAMED_TUPLE
 
-    for v, c in zip(v_post, c_post):
+    for v, c in zip(*POSTPOSITIONS_NAMED_TUPLE):
         if postposition in (v, c):
             if ends_with_vowel:
                 return v
@@ -331,15 +332,16 @@ def extract_alert_msg_w_error(html: str):
     """
     from bs4 import BeautifulSoup as Soup
 
-    soup = Soup(html, parser)
+    soup = Soup(html, PARSER)
     try:
-        msg_tag = soup.select_one("#alert_modal .mg-b-5")
+        from selector import NOVEL_ALERT_MSG_CSS
+        msg_tag = soup.select_one(NOVEL_ALERT_MSG_CSS)
 
     # 알림 창이 나오지 않음
-    except AttributeError as err:
-        err.add_note(f"{soup.prettify() = }")
-        print_under_new_line("[오류]", f"{err = }")
-        yield None, err
+    except AttributeError as ae:
+        ae.add_note(f"{soup.prettify() = }")
+        print_under_new_line("[오류]", f"{ae = }")
+        yield None, ae
 
     # 알림 추출
     else:
@@ -353,11 +355,11 @@ def extract_alert_msg_w_error(html: str):
             - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
             """
         # 메시지 無
-        except AttributeError as err:
-            print_under_new_line("[오류]", f"{err = }")
+        except AttributeError as ae:
+            print_under_new_line("[오류]", f"{ae = }")
             print(f"{msg_tag = }")
 
-            yield None, err
+            yield None, ae
         else:
             if alert_msg == "잘못된 소설 번호 입니다.":
                 pass
@@ -375,12 +377,15 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
     """
     assert mode.find("b") == -1
     assure_path_exists(file_path)
+
     try:
         f = open(file_path, mode, encoding='utf-8')
 
     # 기존 파일을 "xt" 모드로 열었음
-    except FileExistsError:
+    except FileExistsError as fe:
         from time import ctime
+
+        # 파일 수정 시간 추출
         mtime: str = ctime(file_path.stat().st_mtime)
 
         # 덮어 쓸 지 질문
@@ -394,14 +399,16 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
             # 덮어 쓰기
             if asked_overwrite and can_overwrite:
                 print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
-                with opened_x_error(file_path, "wt", encoding, skip) as (f, err):
-                    yield f, err
+                with opened_x_error(file_path, "wt", encoding, skip) as (f, fe_in):
+                    yield f, fe_in
+            else:
+                yield None, fe
 
         # 기존 파일 유지
         else:
             print_under_new_line("[알림] 이미 동명의 파일이 있어요.")
 
-        yield None, FileExistsError
+            yield None, fe
 
     # 그 외 파일 입출력 오류
     except OSError as err:
