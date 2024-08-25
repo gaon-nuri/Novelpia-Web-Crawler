@@ -10,11 +10,11 @@ def get_mybook_page_w_err(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    from src.common.module import ua, add_login_key
+    from src.common.module import UA, add_login_key
 
     # 구독 계정으로 로그인
-    headers: dict = {'User-Agent': ua}
-    npd_cookie, headers = add_login_key(headers, plus=True)
+    headers: dict = {'User-Agent': UA}
+    npd_cookie, headers = add_login_key(headers, True)
 
     from requests.exceptions import ConnectionError
     from urllib3.exceptions import MaxRetryError
@@ -42,7 +42,7 @@ def get_mybook_page_w_err(url: str):
     # 성공
     else:
         html: str = res.text
-        assert html != "", "빈 HTML"
+        assert html != ""
         yield html, None
 
 
@@ -52,15 +52,17 @@ def extract_my_books(html: str):
     :param html: 내 서재 페이지 HTML
     """
     # HTML 응답 파싱
-    from src.common.module import parser
+    from src.common.module import PARSER
     from bs4 import BeautifulSoup as Soup
     from bs4.filter import SoupStrainer as Strainer
+    from src.common.selector import MY_BOOK_TABLE_ROW_CSS
 
-    only_my = Strainer("div", {"class": "row"})
-    my_soup = Soup(html, parser, parse_only=only_my).extract()
+    only_my = Strainer("div", {"class": MY_BOOK_TABLE_ROW_CSS})
+    my_soup = Soup(html, PARSER, parse_only=only_my).extract()
     # my_books = my_soup.select("div.novelbox", limit=30)
+    from src.common.selector import MY_BOOK_TITLE_CSS
 
-    only_title = Strainer("b", {"class": "name_st"})
+    only_title = Strainer("b", {"class": MY_BOOK_TITLE_CSS})
     titles = my_soup.find_all(only_title)
 
     yield from titles
@@ -86,10 +88,10 @@ def mybook_main():
     url_paths = map(extract_url, title_tags)
 
     from urllib.parse import urljoin
+    from src.common.const import HOST
 
-    base_url: str = "https://novelpia.com"
     count: int = len(title_tags)
-    urls = (url for url in map(urljoin, [base_url] * count, url_paths))
+    urls = (url for url in map(urljoin, [HOST] * count, url_paths))
 
     from src.common.module import get_novel_main_w_error, print_under_new_line
 
@@ -98,7 +100,7 @@ def mybook_main():
             if err:
                 print_under_new_line("[오류]", f"{err = }")
             else:
-                from src.metadata.novel_info import Novel, extract_novel_info, novel_to_md_file
+                from src.novel_info import Novel, extract_novel_info, novel_to_md_file
 
                 novel: Novel = extract_novel_info(html)
                 novel_to_md_file(novel)
