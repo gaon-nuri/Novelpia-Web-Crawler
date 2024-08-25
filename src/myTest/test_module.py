@@ -4,8 +4,6 @@ from unittest import TestCase, main, skip
 
 from src.common.module import *
 
-total_novel_cnt: int = 299487  # 노벨피아 소설 수 (2024-08-23 21:36 기준)
-
 
 class TestGetEnvVar(TestCase):
     """
@@ -33,7 +31,7 @@ class TestGetEnvVar(TestCase):
 
 class AddLoginKey(TestCase):
     def test_add_login_key(self):
-        header: dict[str: str] = {"User-Agent": ua}
+        header: dict[str: str] = {"User-Agent": UA}
         given_key, new_header = add_login_key(header)
         real_key: str = new_header["Cookie"].split("=")[1]
 
@@ -86,7 +84,9 @@ class GetNovelMainPage(TestCase):
 
     @skip
     def test_valid_novel_codes(self):
-        for num in range(1, total_novel_cnt):
+        from src.common.const import TOTAL_NOVEL_COUNT
+
+        for num in range(1, TOTAL_NOVEL_COUNT):
             code = str(num)
             with self.subTest(code=code):
                 url: str = "https://novelpia.com/novel/" + code
