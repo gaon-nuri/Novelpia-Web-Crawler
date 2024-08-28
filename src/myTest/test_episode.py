@@ -1,3 +1,4 @@
+"""회차 관련 기능 테스트"""
 from unittest import TestCase, main, skip
 
 from src.common.episode import Ep, extract_ep_info, extract_ep_tags, get_ep_list, get_ep_view_counts, has_prologue
@@ -12,7 +13,7 @@ class ChkMetaClass(TestCase):
         from src.common.episode import Ep
 
         print_under_new_line("Ep.mro():", Ep.mro())
-        
+
         self.assertTrue(isinstance(Ep, UserMeta))
 
 
@@ -35,17 +36,15 @@ class CntNovelWithPrologue(TestCase):
 
         :return: 각각 프롤로그가 있으면 성공
         """
-        from src.common.const import TOTAL_NOVEL_COUNT  # 노벨피아 총 소설 수
+        from src.common.const import ALL_NOVEL_COUNT  # 노벨피아 총 소설 수
 
-        for num in range(1, TOTAL_NOVEL_COUNT):
+        for num in range(1, ALL_NOVEL_COUNT):
             code = str(num)
             with self.subTest(code=code):
                 self.assertTrue(has_prologue(code))
 
 
 class GetEpListAndInfo(TestCase):
-    from src.common.const import DEFAULT_TIME
-
     def test_invalid_novel(self):
         novel_code: str = "0"
         ep_no: int = 16
@@ -63,14 +62,10 @@ class GetEpListAndInfo(TestCase):
             ep_code,
             f"https://novelpia.com/viewer/{ep_code}",
             "2021-01-07",
-            self.DEFAULT_TIME,
-            got_time,
-            -1,
-            -1,
-            {"자유"},
-            0,
-            117,
-            -1,
+            got_time=got_time,
+            types={"자유"},
+            num=0,
+            letter=117,
         )
         self.assertEqual(*map(str, [answer_ep, got_ep]))
 
@@ -90,14 +85,10 @@ class GetEpListAndInfo(TestCase):
             "280",
             "https://novelpia.com/viewer/280",
             "2020-11-18",
-            self.DEFAULT_TIME,
-            self.DEFAULT_TIME,
-            1,
-            35,
-            {"자유"},
-            0,
-            2846,
-            -1,
+            view=35,
+            types={"자유"},
+            num=0,
+            letter=2846,
         )
         self.assertEqual(*map(str, [answer_ep, got_ep]))
 
@@ -130,7 +121,7 @@ class GetEpListAndInfo(TestCase):
         """
         code: str = "2"
         html: str = get_ep_list(code)
-        ep: Ep = extract_ep_info(html, 1)
+        ep: Ep = extract_ep_info(html)
 
         self.assertIsNone(ep)
 
@@ -146,7 +137,7 @@ class CntNoEpNovelByInfo(TestCase):
             code = str(num)
             with self.subTest(code=code):
                 html: str = get_ep_list(code)
-                info_dic: dict = extract_ep_info(html, 1)
+                info_dic: dict = extract_ep_info(html)
                 self.assertIsNone(info_dic)
 
 
@@ -157,7 +148,7 @@ class GetNovelUpDate(TestCase):
 
     def test_single_ep(self):
         """단편 소설의 회차 게시 일자 추출 테스트"""
-        
+
         code: str = "124146"  # <연중용 나데나데 소설>
         up_date: str = "2023-12-13"
 
@@ -165,19 +156,19 @@ class GetNovelUpDate(TestCase):
 
     def test_multiple_ep(self):
         """장편 소설의 회차 게시 일자 추출 테스트"""
-        
+
         code: str = "247416"  # <숨겨진 흑막이 되었다>
         fst_up_date: str = "2023-12-11"
         lst_up_date: str = "2024-04-18"
 
-        fst_match: bool = (GetNovelUpDate.get_novel_up_dates(code, "DOWN") == fst_up_date)
+        fst_match: bool = (GetNovelUpDate.get_novel_up_dates(code) == fst_up_date)
         lst_match: bool = (GetNovelUpDate.get_novel_up_dates(code, "UP") == lst_up_date)
 
         self.assertTrue(fst_match and lst_match)
 
     def test_no_ep(self):
         """회차가 없는 소설의 회차 게시 일자 추출 테스트"""
-        
+
         code: str = "2"  # <건물주 아들>, 최초의 삭제된 소설. 동명의 9번 소설의 습작?
 
         self.assertIsNone(GetNovelUpDate.get_novel_up_dates(code))
@@ -185,7 +176,7 @@ class GetNovelUpDate(TestCase):
     @skip
     def test_scheduled_ep(self):
         """예약 회차 게시 일자 추출 테스트"""
-        
+
         code: str = "610"
         up_date: str = "2024-08-19T04:25:29"
 
