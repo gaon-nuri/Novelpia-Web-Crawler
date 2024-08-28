@@ -1,15 +1,20 @@
+"""공통 함수들
+
+"""
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from .const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER, UA
+from .const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER
 from .userIO import print_under_new_line
 
 
 class UserMeta(type):
+    """아무 것도 하지 않는 사용자 메타 클래스."""
     pass
 
 
+# noinspection PyMissingOrEmptyDocstring
 class Page(metaclass=UserMeta):
     """노벨피아 웹 페이지 클래스.
 
@@ -59,7 +64,7 @@ class Page(metaclass=UserMeta):
         return str(page_info_dic)
 
     @property
-    def title(self):
+    def title(self) -> str:
         return self._title
 
     @title.setter
@@ -68,7 +73,7 @@ class Page(metaclass=UserMeta):
             self._title = title
 
     @property
-    def code(self):
+    def code(self) -> str:
         return self._code
 
     @code.setter
@@ -80,20 +85,23 @@ class Page(metaclass=UserMeta):
             print("소설 번호를 자연수로 설정해 주세요.")
 
     @property
-    def url(self):
+    def url(self) -> str:
         return self._url
 
     @url.setter
     def url(self, url: str):
         from requests import get, Response
-        res: Response = get(url, headers={"User-Agent": UA})
+        from .const import BASIC_HEADERS
+
+        res: Response = get(url, headers=BASIC_HEADERS)
+
         try:
             domain: str = res.headers.get("Access-Control-Allow-Origin")
         except KeyError as ke:
             print_under_new_line("[오류]", f"{ke = }")
             print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
         else:
-            from src.common.const import HOST
+            from .const import HOST
 
             if domain == HOST:
                 self._url = url
@@ -101,7 +109,7 @@ class Page(metaclass=UserMeta):
                 print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
 
     @property
-    def ctime(self):
+    def ctime(self) -> str:
         return self._ctime
 
     @ctime.setter
@@ -116,7 +124,7 @@ class Page(metaclass=UserMeta):
             self._ctime = up_date_s
 
     @property
-    def got_time(self):
+    def got_time(self) -> str:
         return self._got_time
 
     @got_time.setter
@@ -124,6 +132,12 @@ class Page(metaclass=UserMeta):
         self._got_time = now.isoformat(timespec="minutes")
 
     def pick_one_from(self, key: str, val: str, vals: frozenset):
+        """입력 값이 목록에 들어 있으면 키의 값을 입력 값으로 설정하는 함수
+
+        :param key: 클래스 번수 이름
+        :param val: 클래스 변수 값
+        :param vals: 목록
+        """
         if val in vals:
             self.__setattr__(key, val)
         else:
@@ -131,15 +145,27 @@ class Page(metaclass=UserMeta):
             print(*vals, "중에서 선택해 주세요.")
 
     def add_one_from(self, key: str, val: str, vals: frozenset):
+        """입력 값이 목록에 들어 있으면 키의 값에 입력 값을 더하는 함수
+
+        :param key: 클래스 번수 이름
+        :param val: 클래스 변수 값
+        :param vals: 목록
+        """
         if val in vals:
             self_value = self.__getattribute__(key)
             assert isinstance(self_value, list)
+
             self.__setattr__(key, self_value.append(val))
         else:
             print_under_new_line(f"{self}.{key}에 {val}(을)를 추가할 수 없어요.")
             print(*vals, "중에서 선택해 주세요.")
 
     def set_signed_int(self, key: str, val: int):
+        """입력 값이 양수이면 키의 값을 입력 값으로 설정하는 함수
+
+        :param key: 클래스 변수 이름
+        :param val: 클래스 변수 값
+        """
         if not val:
             self.__setattr__(key, -1)
         elif val >= 0:
@@ -174,10 +200,12 @@ def get_env_var_w_error(env_var_name: str):
     """
     try:
         from os import environ
+
         env_var: str = environ[env_var_name]
     except KeyError as ke:
         print_under_new_line("[오류]", f"{ke = }")
         print(f"[오류] 환경 변수 '{env_var_name}' 을 찾지 못했어요.")
+
         yield None, ke
     else:
         yield env_var, None
@@ -251,8 +279,9 @@ def get_novel_main_w_error(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    headers: dict = {'User-Agent': UA}
-    npd_cookie, headers = add_npd_cookie(headers)
+    from .const import BASIC_HEADERS
+
+    npd_cookie, headers = add_npd_cookie(BASIC_HEADERS)
 
     from requests.exceptions import ConnectionError
     from urllib3.exceptions import MaxRetryError
@@ -296,7 +325,7 @@ def get_postposition(kr_word: str, postposition: str) -> str:
     한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
     참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
     """
-    from src.common.const import POSTPOSITIONS_NAMED_TUPLE
+    from .const import POSTPOSITIONS_NAMED_TUPLE
 
     for v, c in zip(*POSTPOSITIONS_NAMED_TUPLE):
         if postposition in (v, c):
@@ -392,7 +421,7 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
         if not skip:
             question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
 
-            from src.common.userIO import input_permission
+            from .userIO import input_permission
 
             asked_overwrite, can_overwrite = input_permission(question)
 
