@@ -1,3 +1,6 @@
+"""회차 관련 함수들
+
+"""
 from datetime import datetime
 from typing import Generator
 from urllib.parse import urljoin
@@ -8,10 +11,11 @@ from bs4.filter import SoupStrainer
 from requests import post
 
 from src.common.const import DEFAULT_TIME, EP_TYPES_NAMED_TUPLE, HOST
-from src.common.module import PARSER, Page, UA
+from src.common.module import PARSER, Page
 from src.common.userIO import print_under_new_line
 
 
+# noinspection PyMissingOrEmptyDocstring
 class Ep(Page):
     """노벨피아 회차 정보 클래스.
 
@@ -66,7 +70,7 @@ class Ep(Page):
         return super().set_signed_int(key, val)
 
     @property
-    def types(self):
+    def types(self) -> set[str]:
         return self._types
 
     @types.setter
@@ -75,7 +79,7 @@ class Ep(Page):
         self.__add_one_from("_types", type, all_types)
 
     @property
-    def num(self):
+    def num(self) -> int:
         return self._num
 
     @num.setter
@@ -98,7 +102,7 @@ class Ep(Page):
             raise ValueError(f"{num}은(는) 올바른 화수가 아니에요.")
 
     @property
-    def letter(self):
+    def letter(self) -> int:
         return self._letter
 
     @letter.setter
@@ -106,7 +110,7 @@ class Ep(Page):
         self.__set_signed_int("_letter", letter)
 
     @property
-    def comment(self):
+    def comment(self) -> int:
         return self._comment
 
     @comment.setter
@@ -126,15 +130,17 @@ def get_ep_list(novel_code: str, sort: str = "DOWN", page: int = 1, plus_login: 
     # Chrome DevTools 에서 복사한 POST 요청 URL 및 양식 데이터
     req_url: str = urljoin(HOST, "/proc/episode_list")
     form_data: dict = {"novel_no": novel_code, "sort": sort, "page": page - 1}  # 1페이지 -> page = 0, ...
-    headers: dict[str: str] = {'User-Agent': UA}
+    from src.common.const import BASIC_HEADERS
 
     if plus_login:
         from src.common.module import add_login_key
 
         # 요청 헤더에 로그인 키 추가
-        login_key, headers = add_login_key(headers, True)
+        login_key, headers = add_login_key(BASIC_HEADERS, True)
+    else:
+        headers: dict = BASIC_HEADERS
 
-    res = post(url=req_url, data=form_data, headers=headers)  # res: <Response [200]>
+    res = post(req_url, form_data, headers=headers)  # res: <Response [200]>
     ep_list_html: str = res.text
 
     return ep_list_html
@@ -154,12 +160,12 @@ def get_ep_view_counts(novel_code: str, ep_codes: Generator, ep_count: int):
         "episode_arr[]": ["episode_count_view novel_count_view_"] * ep_count,
         "novel_no": novel_code,
     }
-    headers: dict = {"User-Agent": UA}
+    from src.common.const import BASIC_HEADERS
 
     for i, code in enumerate(ep_codes):
         form_data["episode_arr[]"][i] += code
 
-    res = post(url, form_data, headers=headers)
+    res = post(url, form_data, headers=BASIC_HEADERS)
 
     view_cnt_json = res.text
     """{
@@ -466,7 +472,8 @@ def extract_ep_info(list_html: str, ep_no: int = 1):
         return None
 
     # 글자/댓글/추천 수 저장
-    ep.letter, ep.comment, ep.recommend = map(extract_stat, [EP_LETTER_COUNT_CSS, EP_COMMENT_COUNT_CSS, EP_RECOMMEND_COUNT_CSS])
+    ep.letter, ep.comment, ep.recommend = map(extract_stat,
+                                              [EP_LETTER_COUNT_CSS, EP_COMMENT_COUNT_CSS, EP_RECOMMEND_COUNT_CSS])
     """
     노벨피아 글자 수 기준은 공백 문자 및 일부 문장 부호 제외.
     공지 참고: https://novelpia.com/faq/all/view_383218/
@@ -487,8 +494,8 @@ def has_prologue(novel_code: str) -> bool:
     - 공지 참고: https://novelpia.com/notice/all/view_1274648/
     """
 
-    ep_list_html: str = get_ep_list(novel_code, "DOWN", 1)
-    ep = extract_ep_info(ep_list_html, 1)
+    ep_list_html: str = get_ep_list(novel_code)
+    ep = extract_ep_info(ep_list_html)
 
     return not ep or ep.num == 0
 
