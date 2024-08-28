@@ -1,4 +1,7 @@
-# src.metadata.novel_info
+"""CSS 선택자 모음"""
+################################################################################
+# src.novel_info
+################################################################################
 NOVEL_ALERT_MSG_CSS: str = "#alert_modal .mg-b-5"
 NOVEL_INFO_CSS: str = "epnew-novel-info"
 NOVEL_TITLE_CSS: str = "div.epnew-novel-title"
@@ -9,11 +12,15 @@ NOVEL_HASH_TAG_CSS: str = "p.writer-tag span.tag"
 NOVEL_STAT_CSS: str = ".counter-line-a span"
 NOVEL_SOLE_PICK_RANK_CSS: str = ".counter-line-b span"
 
+################################################################################
 # src.user.mybook
+################################################################################
 MY_BOOK_TITLE_CSS: str = "name_st"
 MY_BOOK_TABLE_ROW_CSS: str = "row"
 
+################################################################################
 # src.common.episode
+################################################################################
 EP_TABLE_CSS: str = "s_inv"
 EP_TAGS_CSS: str = "tr.ep_style5"
 EP_TYPES_CSS: str = "span.s_inv"
