@@ -19,7 +19,7 @@ MY_BOOK_TITLE_CSS: str = "name_st"
 MY_BOOK_TABLE_ROW_CSS: str = "row"
 
 ################################################################################
-# src.common.episode
+# src.func.episode
 ################################################################################
 EP_TABLE_CSS: str = "s_inv"
 EP_TAGS_CSS: str = "tr.ep_style5"
