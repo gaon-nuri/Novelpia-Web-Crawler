@@ -6,10 +6,15 @@ from pathlib import Path
 from bs4 import BeautifulSoup as Soup
 from bs4.element import Tag
 from bs4.filter import SoupStrainer as Strainer
+# from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 from src.const.const import DEFAULT_TIME, PARSER, RANK_PLACE_HOLDER
 from src.func.common import Page
 from src.func.userIO import print_under_new_line
+
+# assert load_dotenv(), "환경 변수를 찾지 못했어요."
+config = dotenv_values()
 
 
 # noinspection PyMissingOrEmptyDocstring
@@ -20,7 +25,8 @@ class Novel(Page):
     :var _writer_mem_no: 작가 회원 번호
     :var _novel_age: 허용 독자 연령 (전연령/15금/19금)
     :var _novel_type: 연재 유형 (자유/PLUS)
-    :var _novel_live: 연재 상태 (연재 중, 완결, 삭제, 연습작품, 연재지연, 연재중단 中 1)
+    :var _novel_live: 연재 상태 (연재 중, 완결: 0, 연재지연: 1, 연재중단: 2 中 1)
+    :var _status: 연재 상태 (연재 중, 완결, 삭제, 연습작품, 연재지연, 연재중단 中 1)
     :var _types: 유형
     :var _main_genre: 1차 분류 태그
     :var _tags: 해시 태그로 된 bulleted list
@@ -40,6 +46,7 @@ class Novel(Page):
         "_writer_nick",
         "_writer_mem_no",
         "_novel_type",
+        "_status",
         "_types",
         "_main_genre",
         "_tags",
@@ -64,6 +71,7 @@ class Novel(Page):
                  writer_nick: str = '',
                  writer_mem_no: int = -1,
                  novel_name: str = '',
+                 status: str = '',
                  types: set[str] = None,
                  main_genre: int = -1,
                  tags: str = '',
@@ -87,12 +95,14 @@ class Novel(Page):
 
         super().__init__(novel_name, code, url, reg_date, status_date, count_good, count_view)
 
+        self._status = None
         self._writer_nick = writer_nick
         self._writer_mem_no = writer_mem_no
         self._novel_age = novel_age
         self._novel_type = novel_type
         if types is None:
             types = set()
+        self._status = status
         self._novel_live = novel_live
         self._types = types
         self._main_genre = main_genre
@@ -163,23 +173,27 @@ class Novel(Page):
         else:
             self._last_write_date = up_date_s
 
-    def __pick_one_from(self, key: str, val: str, vals: frozenset):
+    def __pick_one_from(self, key: str, val: str, vals: frozenset) -> None:
         super().pick_one_from(key, val, vals)
 
-    def __add_one_from(self, key: str, val: str, vals: frozenset):
+    def __add_one_from(self, key: str, val: str, vals: frozenset) -> None:
         return super().add_one_from(key, val, vals)
 
-    def __set_signed_int(self, key: str, val: int):
+    def __set_signed_int(self, key: str, val: int) -> None:
         super().set_signed_int(key, val)
 
     @property
     def novel_live(self) -> int:
         return self._novel_live
 
-    @novel_live.setter
-    def novel_live(self, novel_live: str):
-        novel_live_options = frozenset(["연재 중", "완결", "연재지연", "연재중단", "삭제", "연습작품"])
-        self.__pick_one_from("_novel_live", novel_live, novel_live_options)
+    @property
+    def status(self) -> str:
+        return self._status
+
+    @status.setter
+    def status(self, status: str):
+        status_options = frozenset(["연재 중", "완결", "연재지연", "연재중단", "삭제", "연습작품"])
+        self.__pick_one_from("_status", status, status_options)
 
     @property
     def types(self) -> set[str]:
@@ -235,8 +249,62 @@ class Novel(Page):
         self._synopsis = summary_callout
 
 
-def get_favorite_novel_info_dics(user_mem_no: int):
-    """회원의 선호작들의 정보를 서버에 요청하고 파싱한 응답을 반환하는 함수
+def toggle_novel_like(novel_code: str) -> tuple[bool, int]:
+    """소설을 선호작으로 등록/해제하는 함수
+
+    :param novel_code: 소설 번호
+    """
+    from requests import post
+    from urllib.parse import urljoin
+
+    from src.func.common import add_login_key
+    from src.const.const import BASIC_HEADERS, HOST
+
+    csrf: str = config["CSRF"]
+    url: str = urljoin(HOST, "/proc/novel_like")
+    data: dict = {
+        "novel_no": novel_code,
+        "csrf": csrf,
+    }
+    login_key, headers = add_login_key(BASIC_HEADERS)
+    res = post(url, data, headers=headers)
+
+    try:
+        # {'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}
+        flag_li: list[str] = res.text.split("|")
+        likes = int(flag_li[1])
+
+    # 요청 실패
+    except Exception as err:
+        print_under_new_line("[오류]", toggle_novel_like, f"{err = }")
+        return False, -1
+
+    # 요청 성공
+    else:
+        # 등록 승인
+        if flag_li[0] == "on":  # on|19094||0
+            msg: str = novel_code + "번 소설을 선호작으로 등록했어요."
+            print_under_new_line(msg)
+            return True, likes
+
+        # 해제 승인
+        elif flag_li[0] == "off":  # off|19093||
+            msg: str = novel_code + "번 소설을 선호작에서 해제했어요."
+            print_under_new_line(msg)
+            return True, likes
+
+        # 거부 (로그인 필요)
+        elif flag_li[0] == "login":
+            print_under_new_line("선호작 등록을 위해서는 로그인이 필요해요.")
+            return False, likes
+
+        # 거부 (그 외)
+        else:
+            return False, -1
+
+
+def get_like_novel_info_dics(user_mem_no: int):
+    """회원의 선호작 정보를 서버에 요청하고 파싱한 응답을 반환하는 함수
 
     :param user_mem_no: 회원 번호
     :return: 선호작 수, 소설 정보 목록들
@@ -274,11 +342,11 @@ def get_favorite_novel_info_dics(user_mem_no: int):
         return count, info_dics
 
 
-def chk_favorite_novel_statuses():
+def extract_like_novels_status():
     """삭제, 완결, 연재지연/중단, 연재 중 하나로 상태를 추출하는 함수."""
-    from src.const.const import MEM_NO
 
-    count, dics = get_favorite_novel_info_dics(MEM_NO)
+    mem_no = int(config["SUB_MEM_NO"])
+    count, dics = get_like_novel_info_dics(mem_no)
     status_dic: dict[int: str] = {}
 
     for dic in dics:
@@ -380,13 +448,13 @@ def chk_novel_status(novel: Novel, html: str):
                 postposition: str = get_postposition(html_title, "은")
                 alert_msg = f"<{html_title}>{postposition} {alert_msg}"
 
-                novel.novel_live = "삭제"
+                novel.status = "삭제"
 
             elif alert_msg == "잘못된 접근입니다.":
                 alert_msg = f"<{html_title}>에 대한 {alert_msg}"
 
                 novel.types.add("자유")
-                novel.novel_live = "연습작품"
+                novel.status = "연습작품"
 
             elif alert_msg == '잘못된 소설 번호 입니다.':
                 novel = None
@@ -443,7 +511,7 @@ def extract_novel_info(html: str) -> Novel | None:
     ################################################################################
     with chk_novel_status(novel, html) as (novel, soup, err):
         if err:
-            return None
+            return novel
         else:
             info_soup = soup
 
@@ -472,7 +540,7 @@ def extract_novel_info(html: str) -> Novel | None:
     flag_list: Generator = (badge.text for badge in badge_tag.select("span"))
     from src.const.const import NOVEL_TYPES_NAMED_TUPLE, NOVEL_STATUSES_NAMED_TUPLE
 
-    novel.novel_live = NOVEL_STATUSES_NAMED_TUPLE.ongoing
+    novel.status = NOVEL_STATUSES_NAMED_TUPLE.ongoing
 
     for flag in flag_list:
         if flag in NOVEL_TYPES_NAMED_TUPLE:
@@ -480,7 +548,7 @@ def extract_novel_info(html: str) -> Novel | None:
                 flag = "성인"
             novel.types.add(flag)
         elif flag in NOVEL_STATUSES_NAMED_TUPLE:
-            novel.novel_live = flag
+            novel.status = flag
 
     ################################################################################
     # 해시태그 목록 추출 (최소 2개 - 중복 포함 4개)
@@ -568,7 +636,7 @@ def novel_info_to_md(novel: Novel) -> str:
     deleted: str = STATUS_TU.deleted
 
     # 삭제된 소설, Markdown 미작성
-    if novel.novel_live == deleted:
+    if novel.status == deleted:
         return deleted
 
     type_bools: list[str] = [type + ": True" for type in novel.types]
