@@ -1,7 +1,8 @@
+"""회차 본문을 내려받는 코드"""
 from urllib.parse import urljoin
 
-from src.common.module import PARSER, Path
-from src.common.userIO import input_num, print_under_new_line
+from src.func.common import PARSER, Path
+from src.func.userIO import input_num, print_under_new_line
 
 
 def find_ep_location(novel_code: str, ep_num: int = -1) -> tuple[int, int]:
@@ -12,7 +13,7 @@ def find_ep_location(novel_code: str, ep_num: int = -1) -> tuple[int, int]:
     :return: 페이지 번호, 회차 서수
     """
     while True:
-        from src.common.episode import has_prologue
+        from src.func.episode import has_prologue
         has_prologue_ep: bool = has_prologue(novel_code)
 
         if ep_num == -1:
@@ -56,13 +57,11 @@ def get_ep_content(ep_code: str) -> list[str] | None:
     req_url: str = urljoin("https://novelpia.com/proc/viewer_data/", ep_code)
     form_data: dict = {"size": 14}
 
-    from src.common.const import UA
-    from src.common.module import add_login_key
-
-    headers: dict[str: str] = {'User-Agent': UA}
+    from src.const.const import BASIC_HEADERS
+    from src.func.common import add_login_key
 
     # 헤더에 로그인 키 추가
-    login_key_added, headers = add_login_key(headers, True)
+    login_key_added, headers = add_login_key(BASIC_HEADERS, True)
 
     from requests import post
     res = post(url=req_url, data=form_data, headers=headers)  # response: <Response [200]>
@@ -73,7 +72,7 @@ def get_ep_content(ep_code: str) -> list[str] | None:
     \n요청 성공 시: {"s": [{"text": "~"}], "c": "{\"ct\":~\"\",\"iv\":~\"\",\"s\":\"~\"}"}
     \n요청 실패 시: <div id="alert_modal" class="modal fade" style="display:none;"> ~
     '''
-    from src.common.module import load_json_w_error
+    from src.func.common import load_json_w_error
 
     # 응답 JSON 파싱 및 본문 추출
     with load_json_w_error(ep_content) as (ep_content_dic, err):
@@ -82,12 +81,12 @@ def get_ep_content(ep_code: str) -> list[str] | None:
             from bs4 import BeautifulSoup
 
             # 오류 메시지 추출
-            from src.common.module import extract_alert_msg_w_error
+            from src.func.common import extract_alert_msg_w_error
 
             with extract_alert_msg_w_error(ep_content) as (alert_msg, attr_err):
                 if attr_err:
                     raise RuntimeError("작업 예정")
-                if alert_msg.endswith("잘못된 소설 번호 입니다."):
+                if alert_msg == "잘못된 소설 번호 입니다.":
                     pass
             return None
 
@@ -106,11 +105,12 @@ def get_ep_content(ep_code: str) -> list[str] | None:
 
 
 def viewer_main() -> None:
+    """직접 실행할 때만 호출되는 메인 함수"""
     novel_num: int = input_num("소설 번호")
     novel_code = str(novel_num)
     url: str = urljoin("https://novelpia.com/novel/", novel_code)
 
-    from src.common.module import get_novel_main_w_error
+    from src.func.common import get_novel_main_w_error
 
     # 메인 페이지 요청
     with get_novel_main_w_error(url) as (html, err):
@@ -119,7 +119,7 @@ def viewer_main() -> None:
 
     # 메인 페이지 파싱, 제목 추출
     from bs4 import BeautifulSoup
-    from src.common.const import HTML_TITLE_PREFIX
+    from src.const.const import HTML_TITLE_PREFIX
 
     soup = BeautifulSoup(html, PARSER)
     novel_title: str = soup.title.text[len(HTML_TITLE_PREFIX):]  # '노벨피아 - 웹소설로 꿈꾸는 세상! - '의 22자 제거
@@ -130,9 +130,9 @@ def viewer_main() -> None:
     page, ep_no = find_ep_location(novel_code, ep_num)
 
     # 회차 목록 HTML 요청 및 회차 정보 추출
-    from src.common.episode import get_ep_list, Ep, extract_ep_info
+    from src.func.episode import get_ep_list, Ep, extract_ep_info
 
-    ep_list_html = get_ep_list(novel_code, "DOWN", page, True)
+    ep_list_html = get_ep_list(novel_code, page=page, plus_login=True)
     ep: Ep = extract_ep_info(ep_list_html, ep_no)
 
     # 회차 본문 추출
@@ -144,7 +144,7 @@ def viewer_main() -> None:
 
     # 파일 경로 지정
     if suffix == ".md":
-        from src.common.module import get_env_var_w_error
+        from src.func.common import get_env_var_w_error
 
         with get_env_var_w_error("MARKDOWN_DIR") as (file_dir, err):
             if err:
@@ -157,22 +157,23 @@ def viewer_main() -> None:
     file_name: str = f"EP.{ep_num} - {ep.title}"  # EP.0 프롤로그.ext
     file_path = Path(file_dir).joinpath(file_name).with_suffix(suffix)  # ~/novel/제목/EP.0 프롤로그.html
 
-    from src.common.module import assure_path_exists
+    from src.func.common import assure_path_exists
 
     # 폴더 확보
     assure_path_exists(file_path)
 
     # 회차 본문 줄별 목록을 Markdown 문자열 Generator로 변환
     from typing import Generator
-    from src.common.episode import ep_content_to_md
+    from src.func.episode import ep_content_to_md
 
     markup_gen: Generator = ep_content_to_md(ep, ep_lines)
 
     # 회차 본문 줄별 목록을 HTML로 변환
     # markup: str = ep_content_to_html(ep_lines)
 
-    from src.common.module import opened_x_error
+    from src.func.common import opened_x_error
 
+    # Markdown 문자열 Generator를 파일에 쓰기
     with opened_x_error(file_path, mode="x") as (f, err):
         # OSError 등
         if err:

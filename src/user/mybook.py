@@ -1,3 +1,4 @@
+"""내 서재 페이지의 선호작들의 정보를 크롤링하여 Markdown 파일로 쓰는 코드"""
 from contextlib import contextmanager
 
 from bs4.element import Tag
@@ -10,11 +11,11 @@ def get_mybook_page_w_err(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    from src.common.module import UA, add_login_key
+    from src.const.const import BASIC_HEADERS
+    from src.func.common import add_login_key
 
     # 구독 계정으로 로그인
-    headers: dict = {'User-Agent': UA}
-    npd_cookie, headers = add_login_key(headers, True)
+    npd_cookie, headers = add_login_key(BASIC_HEADERS, True)
 
     from requests.exceptions import ConnectionError
     from urllib3.exceptions import MaxRetryError
@@ -43,6 +44,7 @@ def get_mybook_page_w_err(url: str):
     else:
         html: str = res.text
         assert html != ""
+
         yield html, None
 
 
@@ -52,15 +54,15 @@ def extract_my_books(html: str):
     :param html: 내 서재 페이지 HTML
     """
     # HTML 응답 파싱
-    from src.common.module import PARSER
+    from src.func.common import PARSER
     from bs4 import BeautifulSoup as Soup
     from bs4.filter import SoupStrainer as Strainer
-    from src.common.selector import MY_BOOK_TABLE_ROW_CSS
+    from src.const.selector import MY_BOOK_TABLE_ROW_CSS
 
     only_my = Strainer("div", {"class": MY_BOOK_TABLE_ROW_CSS})
     my_soup = Soup(html, PARSER, parse_only=only_my).extract()
     # my_books = my_soup.select("div.novelbox", limit=30)
-    from src.common.selector import MY_BOOK_TITLE_CSS
+    from src.const.selector import MY_BOOK_TITLE_CSS
 
     only_title = Strainer("b", {"class": MY_BOOK_TITLE_CSS})
     titles = my_soup.find_all(only_title)
@@ -69,6 +71,11 @@ def extract_my_books(html: str):
 
 
 def extract_url(div_tag: Tag):
+    """HTML div 태그에서 URL을 추출하는 함수
+
+    :param div_tag: onclick 속성을 가진 div
+    :return: URL 상대 경로
+    """
     click: str = div_tag.attrs["onclick"]  # click: "$('.loads').show();location = '/novel/3790123';"
     start_index: int = click.find("/novel")
     url_path: str = click[start_index: -2]
@@ -77,6 +84,7 @@ def extract_url(div_tag: Tag):
 
 
 def mybook_main():
+    """직접 실행할 때만 호출되는 메인 함수"""
     req_url: str = "https://novelpia.com/mybook/"
     with get_mybook_page_w_err(req_url) as (html, err):
         if err:
@@ -88,12 +96,12 @@ def mybook_main():
     url_paths = map(extract_url, title_tags)
 
     from urllib.parse import urljoin
-    from src.common.const import HOST
+    from src.const.const import HOST
 
     count: int = len(title_tags)
     urls = (url for url in map(urljoin, [HOST] * count, url_paths))
 
-    from src.common.module import get_novel_main_w_error, print_under_new_line
+    from src.func.common import get_novel_main_w_error, print_under_new_line
 
     for i in range(count):
         with get_novel_main_w_error(next(urls)) as (html, err):
@@ -103,7 +111,7 @@ def mybook_main():
                 from src.novel_info import Novel, extract_novel_info, novel_to_md_file
 
                 novel: Novel = extract_novel_info(html)
-                novel_to_md_file(novel)
+                novel_to_md_file(novel, True, True)
 
 
 if __name__ == "__main__":
