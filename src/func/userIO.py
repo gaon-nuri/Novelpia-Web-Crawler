@@ -93,3 +93,9 @@ def input_num(num_type: str) -> int:
         # 유효한 소설 번호 (자연수)
         if is_valid_num and number >= 0:
             return number
+
+
+if __name__ == "__main__":
+    from doctest import testmod
+
+    testmod()
