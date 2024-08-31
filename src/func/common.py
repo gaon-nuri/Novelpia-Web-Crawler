@@ -5,13 +5,85 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from .const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER
-from .userIO import print_under_new_line
+from src.const.const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER
+from src.func.userIO import print_under_new_line
 
 
 class UserMeta(type):
     """아무 것도 하지 않는 사용자 메타 클래스."""
     pass
+
+
+class Descriptor:
+    """디스크립터 클래스를 데코레이터로 사용"""
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, owner):
+        from functools import partial
+
+        return partial(self.func, instance)
+
+
+class DescriptorND:
+    """비데이터 (함수) 디스크립터 클래스"""
+    def __init__(self, func):
+        self.func = func
+
+    def __set_name__(self, owner, name):
+        self._name = "_" + name
+
+    def __get__(self, instance, owner):
+        print("get")
+        from functools import partial
+
+        return partial(self.func, instance)
+        # def inner(*args, **kwargs):
+        #     return self._func(*args, **kwargs)
+        # return inner
+
+
+class MutableAttribute:
+    """데이터 (변경 가능 속성) 디스크립터 클래스"""
+    def __init__(self, value=None):
+        self.value = value
+
+    def __set_name__(self, owner, name):
+        self._name = "_" + name
+
+    def __get__(self, instance, owner):
+        print("get")
+        if self._name in instance.__dict__:
+            return instance.__dict__[self._name]
+        else:
+            return self.value
+
+    def __set__(self, instance, value):
+        print("set")
+        instance.__dict__[self._name] = value
+
+    def __delete__(self, instance):
+        print("del")
+        del self.value
+
+
+class ImmutableAttribute:
+    """데이터 (변경 불가능 속성) 디스크립터 클래스"""
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, owner):
+        print("get")
+        return self.func(instance)
+
+    def __set__(self, instance, value):
+        print("set")
+        raise AttributeError("갱신이 불가합니다.")
+
+    def __delete__(self, instance):
+        print("del")
+        raise AttributeError("삭제가 불가합니다.")
 
 
 # noinspection PyMissingOrEmptyDocstring
@@ -24,8 +96,8 @@ class Page(metaclass=UserMeta):
     :var _ctime: 공개 시각
     :var _mtime: 갱신 시각
     :var _got_time: 크롤링 시각
-    :var _recommend: 추천 수
-    :var _view: 조회 수
+    :var _count_good: 추천 수
+    :var _count_view: 조회 수
     """
     __slots__ = (
         "_title",
@@ -34,8 +106,8 @@ class Page(metaclass=UserMeta):
         "_ctime",
         "_mtime",
         "_got_time",
-        "_recommend",
-        "_view"
+        "_count_good",
+        "_count_view"
     )
 
     def __init__(self,
@@ -44,18 +116,19 @@ class Page(metaclass=UserMeta):
                  url: str = '',
                  ctime: str = DEFAULT_TIME,
                  mtime: str = DEFAULT_TIME,
-                 got_time: str = datetime.today().isoformat(timespec='minutes'),
-                 recommend: int = -1,
-                 view: int = -1
+                 count_good: int = -1,
+                 count_view: int = -1
                  ):
+        from datetime import datetime
+
+        self._got_time = datetime.today().isoformat(timespec='minutes')
         self._title = title
         self._code = code
         self._url = url
         self._ctime = ctime
         self._mtime = mtime
-        self._got_time = got_time
-        self._recommend = recommend
-        self._view = view
+        self._count_good = count_good
+        self._count_view = count_view
 
     def __str__(self):
         page_info_dic: dict = {}
@@ -91,7 +164,7 @@ class Page(metaclass=UserMeta):
     @url.setter
     def url(self, url: str):
         from requests import get, Response
-        from .const import BASIC_HEADERS
+        from src.const.const import BASIC_HEADERS
 
         res: Response = get(url, headers=BASIC_HEADERS)
 
@@ -101,7 +174,7 @@ class Page(metaclass=UserMeta):
             print_under_new_line("[오류]", f"{ke = }")
             print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
         else:
-            from .const import HOST
+            from src.const.const import HOST
 
             if domain == HOST:
                 self._url = url
@@ -116,10 +189,9 @@ class Page(metaclass=UserMeta):
     def ctime(self, up_date_s: str):
         try:
             datetime.fromisoformat(up_date_s)  # up_date_s: "2024-12-13"
-        except ValueError as err:
-            err.add_note(*err.args)
+        except TypeError as err:
             print_under_new_line("[오류]", f"{err = }")
-            raise
+            # raise
         else:
             self._ctime = up_date_s
 
@@ -166,7 +238,7 @@ class Page(metaclass=UserMeta):
         :param key: 클래스 변수 이름
         :param val: 클래스 변수 값
         """
-        if not val:
+        if val is None:
             self.__setattr__(key, -1)
         elif val >= 0:
             self.__setattr__(key, val)
@@ -175,20 +247,20 @@ class Page(metaclass=UserMeta):
             print("0 이상의 정수로 설정해 주세요.")
 
     @property
-    def recommend(self):
-        return self._recommend
+    def count_good(self):
+        return self._count_good
 
-    @recommend.setter
-    def recommend(self, recommend: int):
-        self.set_signed_int("_recommend", recommend)
+    @count_good.setter
+    def count_good(self, count_good: int):
+        self.set_signed_int("_count_good", count_good)
 
     @property
-    def view(self):
-        return self._view
+    def count_view(self):
+        return self._count_view
 
-    @view.setter
-    def view(self, view: int):
-        self.set_signed_int("_view", view)
+    @count_view.setter
+    def count_view(self, count_view: int):
+        self.set_signed_int("_count_view", count_view)
 
 
 @contextmanager
@@ -279,7 +351,7 @@ def get_novel_main_w_error(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    from .const import BASIC_HEADERS
+    from src.const.const import BASIC_HEADERS
 
     npd_cookie, headers = add_npd_cookie(BASIC_HEADERS)
 
@@ -325,7 +397,7 @@ def get_postposition(kr_word: str, postposition: str) -> str:
     한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
     참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
     """
-    from .const import POSTPOSITIONS_NAMED_TUPLE
+    from src.const.const import POSTPOSITIONS_NAMED_TUPLE
 
     for v, c in zip(*POSTPOSITIONS_NAMED_TUPLE):
         if postposition in (v, c):
@@ -347,6 +419,7 @@ def load_json_w_error(res_json: str):
     except JSONDecodeError as je:
         print_under_new_line("[오류]", f"{je = }")
         je.add_note("응답 JSON: " + res_json)
+
         yield None, je
     else:
         yield dic, None
@@ -363,13 +436,15 @@ def extract_alert_msg_w_error(html: str):
 
     soup = Soup(html, PARSER)
     try:
-        from selector import NOVEL_ALERT_MSG_CSS
+        from src.const.selector import NOVEL_ALERT_MSG_CSS
+
         msg_tag = soup.select_one(NOVEL_ALERT_MSG_CSS)
 
     # 알림 창이 나오지 않음
     except AttributeError as ae:
         ae.add_note(f"{soup.prettify() = }")
         print_under_new_line("[오류]", f"{ae = }")
+
         yield None, ae
 
     # 알림 추출
@@ -377,9 +452,10 @@ def extract_alert_msg_w_error(html: str):
         try:
             alert_msg: str = msg_tag.text
             """
-            1. 잘못된 소설 번호 입니다. (제목, 줄거리 無)
-            2. 삭제된 소설 입니다. (제목 有, 줄거리 無)
-            3. 잘못된 접근입니다. (제목 有, 줄거리 無)
+            * 잘못된 소설 번호 입니다. (제목, 줄거리 無)
+            * 삭제된 소설 입니다. (제목 有, 줄거리 無)
+            * 잘못된 접근입니다. (제목 有, 줄거리 無)
+            * 본 작품은 연습작으로 등록되어 있습니다. (작가 본인만 열람 가능합니다)
             - 연습등록작품은 작가만 열람이 가능
             - 공지 참고: <2021년 01월 13일 - 노벨피아 업데이트 변경사항(https://novelpia.com/notice/20/view_4149/)>
             """
@@ -396,13 +472,14 @@ def extract_alert_msg_w_error(html: str):
 
 
 @contextmanager
-def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", skip: bool = False):
+def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", skip: bool = False, overwrite: bool = False):
     """입력받은 대로 파일을 열고 파일과 오류 내역을 반환하는 함수
 
     :param file_path: 파일 경로
     :param mode: 파일 모드 (읽기, 쓰기, 붙이기, ..)
     :param encoding: 파일의 인코딩 (기본 UTF-8)
     :param skip: 동명의 파일 존재 시 건너뛸 지 여부
+    :param overwrite: 덮어 쓰기 여부
     """
     assert mode.find("b") == -1
     assure_path_exists(file_path)
@@ -416,6 +493,7 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
 
         # 파일 수정 시간 추출
         mtime: str = ctime(file_path.stat().st_mtime)
+        asked_overwrite, can_overwrite = False, False
 
         # 덮어 쓸 지 질문
         if not skip:
@@ -425,18 +503,15 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
 
             asked_overwrite, can_overwrite = input_permission(question)
 
-            # 덮어 쓰기
-            if asked_overwrite and can_overwrite:
-                print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
-                with opened_x_error(file_path, "wt", encoding, skip) as (f, fe_in):
-                    yield f, fe_in
-            else:
-                yield None, fe
+        # 덮어 쓰기
+        if overwrite or (asked_overwrite and can_overwrite):
+            print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
+            with opened_x_error(file_path, "wt", encoding, True, True) as (f, fe_in):
+                yield f, fe_in
 
         # 기존 파일 유지
         else:
             print_under_new_line("[알림] 이미 동명의 파일이 있어요.")
-
             yield None, fe
 
     # 그 외 파일 입출력 오류
@@ -450,9 +525,3 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
         finally:
             f.close()
             print("[알림]", file_path, "파일을 닫았어요.")
-
-
-if __name__ == "__main__":
-    import doctest
-
-    doctest.testmod()
