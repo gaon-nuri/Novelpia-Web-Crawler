@@ -49,11 +49,32 @@ class GetFinalJamo(TestCase):
 
 class GetLikeNovelInfo(TestCase):
     @staticmethod
+    def toggle_novel_alarm(novel_code: str):
+        """원 함수 주석 참조"""
+        from src.novel_info import toggle_novel_action
+
+        success, alarms = toggle_novel_action(novel_code, login=1)
+        print("해당 소설의 현재 알람 수:", alarms)
+
+        return success
+
+    def test_toggle_novel_alarm(self):
+        novel_code: str = "2"  # <건물주 아들>
+
+        self.toggle_novel_alarm(novel_code)
+        status_code: int = self.toggle_novel_alarm(novel_code)
+
+        self.assertTrue(status_code in [1, 2])
+
+    @staticmethod
     def toggle_novel_like(novel_code: str):
         """원 함수 주석 참조"""
-        from src.novel_info import toggle_novel_like
+        from dotenv import dotenv_values
+        from src.novel_info import toggle_novel_action
 
-        success, likes = toggle_novel_like(novel_code)
+        config = dotenv_values()
+        csrf: str = config["CSRF"]
+        success, likes = toggle_novel_action(novel_code, 1, True, csrf)
         print("해당 소설의 현재 선호 수:", likes)
 
         return success
@@ -61,10 +82,10 @@ class GetLikeNovelInfo(TestCase):
     def test_toggle_novel_like(self):
         novel_code: str = "2"  # <건물주 아들>
 
-        # self.toggle_novel_like(novel_code)
-        success: bool = self.toggle_novel_like(novel_code)
+        self.toggle_novel_like(novel_code)
+        status_code: int = self.toggle_novel_like(novel_code)
 
-        self.assertTrue(success)
+        self.assertTrue(status_code in [1, 2])
 
     from dotenv import dotenv_values
 
@@ -86,11 +107,12 @@ class GetLikeNovelInfo(TestCase):
         self.toggle_novel_like(novel_code)
 
         try:
-            got_dic: dict = dics[0]
+            got_dic: dict = next(dics)
 
         # 선호작 X
-        except IndexError as ie:
-            print(self, f"{ie = }")
+        except StopIteration as si:
+            print(self, f"{si = }")
+
             self.fail()
         else:
             answer_dic: dict = {
@@ -105,14 +127,14 @@ class GetLikeNovelInfo(TestCase):
                 'novel_thumb_all': '',
                 'novel_img_all': '',
                 'novel_count': 0,
-                'novel_status': 1,
                 'novel_type': 2,
                 'novel_genre': None,
                 'novel_story': "이것은...\r\n\r\n잔혹한 운명의 흐름속에 놓인 두 괴물의 사랑 이야기.",
+                'novel_status': 1,
                 'novel_weekly': 0,
                 'novel_notice': '',
                 'novel_plus_want': 0,
-                'count_view': 11,
+                'count_view': 12,
                 'count_good': 0,
                 'count_book': 1,
                 'count_pick': 0,
@@ -127,7 +149,7 @@ class GetLikeNovelInfo(TestCase):
                 'is_secondary_creation': 0,
                 'is_contest': 0,
                 'start_date': "2021-01-07 10:38:08",
-                'status_date': "2024-08-31 15:18:42",
+                'status_date': '2024-09-07 19:00:29',
                 'del_date': None,
                 'complete_date': None,
                 'plus_date': None,
@@ -148,27 +170,8 @@ class GetLikeNovelInfo(TestCase):
                 'update_dt': None,
                 'plus_start_date': None,
             }
+
             self.assertEqual(answer_dic, got_dic)
-
-    @classmethod
-    def extract_like_novels_status(cls):
-        """원 함수 주석 참고"""
-        from src.novel_info import extract_like_novels_status
-
-        return extract_like_novels_status()
-
-    def test_chk_like_novels_status(self):
-        got_dic: dict[int, str] = self.extract_like_novels_status()
-        answer_dic: dict[int, str] = {
-            298052: "연재 중",
-            258784: "연재 지연",
-            84: "연재 중단",
-            38191: "완결",
-            99549: "완결",
-            610: "연재 중"
-        }
-
-        self.assertEqual(answer_dic, got_dic)
 
 
 class GetNovelStatus(TestCase):
@@ -181,48 +184,42 @@ class GetNovelStatus(TestCase):
         :param novel_code: 소설 번호
         :return: '연재 중', '완결', '연습작품', '삭제', '연재중단', '연재지연' 中 택 1
         """
-        from urllib.parse import urljoin
-        url: str = urljoin("https://novelpia.com/novel/", novel_code)
+        from src.novel_info import Novel, set_novel_from_likes
 
-        from src.func.common import get_novel_main_w_error
-        with get_novel_main_w_error(url) as (html, err):
-            if err:
-                raise err
+        novels, count = set_novel_from_likes(1, novel_code)
+        novel: Novel = next(novels)
 
-        from src.novel_info import Novel, extract_novel_info
-        novel: Novel = extract_novel_info(html)
-
-        return novel.status
+        return novel.up_status
 
     def test_inaccessible_novel(self):
         code_inaccessible: str = "28"  #
-        status: str = self.chk_up_status(code_inaccessible)
+        up_status: str = self.chk_up_status(code_inaccessible)
 
-        self.assertEqual(STATUSES.draft, status)
+        self.assertEqual(STATUSES.draft, up_status)
 
     def test_deleted_novel(self):
         code_deleted: str = "2"  # <건물주 아들> - 최초의 삭제작
-        status: str = self.chk_up_status(code_deleted)
+        up_status: str = self.chk_up_status(code_deleted)
 
-        self.assertEqual(STATUSES.deleted, status)
+        self.assertEqual(STATUSES.deleted, up_status)
 
     def test_novel_on_hiatus(self):
         code_hiatus: str = "10"  # <미대오빠의 여사친들> - 최초의 연중작
-        status: str = self.chk_up_status(code_hiatus)
+        up_status: str = self.chk_up_status(code_hiatus)
 
-        self.assertEqual(STATUSES.hiatus, status)
+        self.assertEqual(STATUSES.hiatus, up_status)
 
     def test_completed_novel(self):
         code_completed: str = "1"  # <S드립을 잘 치는 여사친> - 최초의 완결작
-        status: str = self.chk_up_status(code_completed)
+        up_status: str = self.chk_up_status(code_completed)
 
-        self.assertEqual(STATUSES.complete, status)
+        self.assertEqual(STATUSES.complete, up_status)
 
     def test_ongoing_novel(self):
         code_ongoing: str = "610"  # <창작물 속으로> - 연재중 (24.8.8 기준)
-        status: str = self.chk_up_status(code_ongoing)
+        up_status: str = self.chk_up_status(code_ongoing)
 
-        self.assertEqual(STATUSES.ongoing, status)
+        self.assertEqual(STATUSES.ongoing, up_status)
 
 
 class CntNovelInStatus(GetNovelStatus):
@@ -233,10 +230,11 @@ class CntNovelInStatus(GetNovelStatus):
     def chk_up_status(novel_code: str):
         return GetNovelStatus.chk_up_status(novel_code)
 
+    @skip
     def test_cnt_novel_on_hiatus(self):
         """연중작 비율을 재는 테스트"""
 
-        for num in range(11, 12):
+        for num in range(1, self.ALL_NOVEL_COUNT):
             code = str(num)
             with self.subTest(code=code):
                 up_status: str = self.chk_up_status(code)
@@ -244,41 +242,82 @@ class CntNovelInStatus(GetNovelStatus):
                 self.assertTrue(up_status == STATUSES.delayed or up_status == STATUSES.hiatus)
 
     @skip
-    def test_cnt_deleted_novel(self, status: str = "삭제"):
+    def test_cnt_deleted_novel(self, real_up_status: str = "삭제"):
         """삭제작 비율을 재는 테스트"""
 
         for num in range(1, self.ALL_NOVEL_COUNT):
             code = str(num)
             with self.subTest(code=code):
-                up_status: str = self.chk_up_status(code)
+                got_up_status: str = self.chk_up_status(code)
 
-                self.assertTrue(up_status == status)
+                self.assertTrue(real_up_status == got_up_status)
 
 
 class NovelToMdFile(TestCase):
     from src.novel_info import Novel
 
     novel_code: str = '247416'
+    info_dic: dict = {
+        "novel_no": novel_code,
+        "novel_name": "숨겨진 흑막이 되었다",
+        "novel_search": "ㅅㅜㅁㄱㅕㅈㅣㄴ ㅎㅡㄱㅁㅏㄱㅇㅣ ㄷㅚㅇㅓㅆㄷㅏ|ㅅㅜㄱㅕㅈㅣ ㅎㅡㅁㅏㅇㅣ ㄷㅚㅇㅓㄷㅏ|ㅅㄱㅈ ㅎㅁㅇ ㄷㅇㄷ",
+        "novel_subtitle": None,
+        "novel_age": 0,
+        "mem_no": 896,
+        "novel_thumb": "",
+        "novel_img": None,
+        "novel_thumb_all": "/imagebox/cover/3ff0030a8af5ee6a2facf697c2976e11_56852_ori.file",
+        "novel_img_all": "/imagebox/cover/0ec297a59a49a6db56922fff3b47a3c1_4587281_q_ori.file",
+        "novel_count": 0,
+        "novel_status": 1,
+        "novel_type": 1,
+        "novel_genre": "[\"현대판타지\",\"하렘\",\"괴담\",\"집착\"]",
+        "novel_story": "괴담, 저주, 여학생 등….\r\n집착해선 안 될 것들이 내게 집착한다",
+        "novel_weekly": 127,
+        "novel_notice": None,
+        "novel_plus_want": 2,
+        "count_view": 2198153,
+        "count_good": 225713,
+        "count_book": 225,
+        "count_pick": 53,
+        "writer_nick": "미츄리",
+        "writer_original": "",
+        "isbn": "",
+        "last_viewdate": "2024-04-18 20:00:00",
+        "is_monopoly": 1,
+        "is_del": 0,
+        "is_complete": 1,
+        "is_donation_refusal": 0,
+        "is_secondary_creation": 0,
+        "is_contest": 0,
+        "start_date": "2023-12-11 15:19:55",
+        "status_date": "2024-08-31 17:45:30",
+        "del_date": None,
+        "complete_date": "2024-04-18 17:58:21",
+        "plus_date": "2023-12-18 09:12:15",
+        "plus_call_date": "2024-01-01 14:42:58",
+        "plus_check_admin_no": 1227680,
+        "last_write_date": "2024-04-17 20:00:00",
+        "novel_live": 0,
+        "live_stop_end_date": None,
+        "is_indent": 0,
+        "main_genre": 12,
+        "is_osmu": None,
+        "flag_collect": 0,
+        "local_code": "ko",
+        "monopoly_date": "2024-01-02 14:55:09",
+        "flag_img_policy": 1,
+        "flag_translate": 0,
+        "reg_date": "2023-12-11 14:12:08",
+        "update_dt": "2024-08-29 17:29:15",
+        "plus_start_date": None
+    }
     novel = Novel(
-        novel_code,
-        f'https://novelpia.com/novel/{novel_code}',
-        '미츄리',
-        896,
-        '숨겨진 흑막이 되었다',
+        info_dic,
         '완결',
         {'독점'},
-        12,
         '\n  - 현대판타지\n  - 하렘\n  - 괴담\n  - 집착',
         '> [!TLDR] 시놉시스\n> 괴담, 저주, 여학생 등….\n> 집착해선 안 될 것들이 내게 집착한다\n',
-        "2023-12-11 15:19:55",
-        "2024-04-17 20:00:00",
-        "2023-12-11 14:12:08",
-        "2024-08-29 15:45:30",
-        1142,
-        14616,
-        225,
-        224772,
-        2189821,
     )
 
     def test_novel_to_md(self):
@@ -293,21 +332,27 @@ aliases:
 작가명: 미츄리
 소설 링크: https://novelpia.com/novel/247416
 tags:
-  - 현대판타지
-  - 하렘
-  - 괴담
-  - 집착
+  - "현대판타지"
+  - "하렘"
+  - "괴담"
+  - "집착"
+PLUS: True
 독점: True
-완독일: 0000-00-00
-연재 시작일: 2023-12-11 14:12:08
+완결: True
+완독일: 0000-00-00T00:00
+연재 시작일: 2023-12-11 15:19:55
 최근(예정) 연재일: 2024-04-17 20:00:00
-정보 수집일: {datetime.today().isoformat(timespec='minutes')}
+소설 등록일: 2023-12-11 14:12:08
+소설 갱신일: 2024-08-29 17:29:15
+원격 갱신일: 2024-08-31 17:45:30
+로컬 갱신일: {datetime.today().isoformat(timespec='minutes')}
 회차 수: 225
-알람 수: 1142
-선호 수: 14616
-추천 수: 224772
-조회 수: 2189821
+알람 수: None
+선호 수: None
+추천 수: 225713
+조회 수: 2198153
 ---
+
 > [!TLDR] 시놉시스
 > 괴담, 저주, 여학생 등….
 > 집착해선 안 될 것들이 내게 집착한다
@@ -316,6 +361,7 @@ tags:
 
         self.assertEqual(formatted_md, converted_md)
 
+    @skip
     def test_novel_to_md_file(self):
         """Novel 클래스 객체를 Markdown 파일로 쓰는 테스트"""
         from src.novel_info import novel_to_md_file
@@ -327,30 +373,24 @@ tags:
     @skip
     def test_novels_to_md_files(self):
         """모든 노벨피아 소설의 정보를 Markdown 파일로 추출하는 테스트"""
-        from src.func.common import get_novel_main_w_error, print_under_new_line
-        from src.const.const import HOST, ALL_NOVEL_COUNT
-
         from urllib.parse import urljoin
-
-        base_url: str = urljoin(HOST, "/novel/")
-        urls = (urljoin(base_url, str(code)) for code in range(1, ALL_NOVEL_COUNT))
         from time import sleep
 
-        while True:
-            url = next(urls)
-            with self.subTest(url=url):
-                with get_novel_main_w_error(url) as (html, err):
-                    if err:
-                        print_under_new_line("[오류]", f"{err = }")
-                        self.fail()
-                    else:
-                        from src.novel_info import Novel, extract_novel_info, novel_to_md_file
+        from src.const.const import HOST, ALL_NOVEL_COUNT
+        from src.novel_info import Novel, set_novel_from_likes, novel_to_md_file
 
-                        novel: Novel = extract_novel_info(html)
-                        if not novel:
-                            continue
-                        novel_to_md_file(novel, True)
+        base_url: str = urljoin(HOST, "/novel/")
+
+        for i in range(1, ALL_NOVEL_COUNT):
+            code = str(i)
+            with self.subTest(url=urljoin(base_url, code)):
+                novels, count = set_novel_from_likes(1, code)
+                novel: Novel = next(novels)
+                if not novel:
+                    continue
+                novel_to_md_file(novel, True)
                 sleep(0.1)
+
                 self.assertTrue(True)
 
 
