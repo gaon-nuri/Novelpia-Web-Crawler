@@ -5,8 +5,10 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from src.const.const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER
-from src.func.userIO import print_under_new_line
+from multipledispatch import dispatch
+
+from .userIO import print_under_new_line
+from ..const.const import DEFAULT_TIME, LOGIN_KEY_NAME, PARSER
 
 
 class UserMeta(type):
@@ -14,76 +16,76 @@ class UserMeta(type):
     pass
 
 
-class Descriptor:
-    """디스크립터 클래스를 데코레이터로 사용"""
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, owner):
-        from functools import partial
-
-        return partial(self.func, instance)
-
-
-class DescriptorND:
-    """비데이터 (함수) 디스크립터 클래스"""
-    def __init__(self, func):
-        self.func = func
-
-    def __set_name__(self, owner, name):
-        self._name = "_" + name
-
-    def __get__(self, instance, owner):
-        print("get")
-        from functools import partial
-
-        return partial(self.func, instance)
-        # def inner(*args, **kwargs):
-        #     return self._func(*args, **kwargs)
-        # return inner
-
-
-class MutableAttribute:
-    """데이터 (변경 가능 속성) 디스크립터 클래스"""
-    def __init__(self, value=None):
-        self.value = value
-
-    def __set_name__(self, owner, name):
-        self._name = "_" + name
-
-    def __get__(self, instance, owner):
-        print("get")
-        if self._name in instance.__dict__:
-            return instance.__dict__[self._name]
-        else:
-            return self.value
-
-    def __set__(self, instance, value):
-        print("set")
-        instance.__dict__[self._name] = value
-
-    def __delete__(self, instance):
-        print("del")
-        del self.value
-
-
-class ImmutableAttribute:
-    """데이터 (변경 불가능 속성) 디스크립터 클래스"""
-
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, owner):
-        print("get")
-        return self.func(instance)
-
-    def __set__(self, instance, value):
-        print("set")
-        raise AttributeError("갱신이 불가합니다.")
-
-    def __delete__(self, instance):
-        print("del")
-        raise AttributeError("삭제가 불가합니다.")
+# class Descriptor:
+#     """디스크립터 클래스를 데코레이터로 사용"""
+#     def __init__(self, func):
+#         self.func = func
+#
+#     def __get__(self, instance, owner):
+#         from functools import partial
+#
+#         return partial(self.func, instance)
+#
+#
+# class DescriptorND:
+#     """비데이터 (함수) 디스크립터 클래스"""
+#     def __init__(self, func):
+#         self.func = func
+#
+#     def __set_name__(self, owner, name):
+#         self._name = "_" + name
+#
+#     def __get__(self, instance, owner):
+#         print("get")
+#         from functools import partial
+#
+#         return partial(self.func, instance)
+#         # def inner(*args, **kwargs):
+#         #     return self._func(*args, **kwargs)
+#         # return inner
+#
+#
+# class MutableAttribute:
+#     """데이터 (변경 가능 속성) 디스크립터 클래스"""
+#     def __init__(self, value=None):
+#         self.value = value
+#
+#     def __set_name__(self, owner, name):
+#         self._name = "_" + name
+#
+#     def __get__(self, instance, owner):
+#         print("get")
+#         if self._name in instance.__dict__:
+#             return instance.__dict__[self._name]
+#         else:
+#             return self.value
+#
+#     def __set__(self, instance, value):
+#         print("set")
+#         instance.__dict__[self._name] = value
+#
+#     def __delete__(self, instance):
+#         print("del")
+#         del self.value
+#
+#
+# class ImmutableAttribute:
+#     """데이터 (변경 불가능 속성) 디스크립터 클래스"""
+#
+#     def __init__(self, func):
+#         self.func = func
+#
+#     def __get__(self, instance, owner):
+#         print("get")
+#         return self.func(instance)
+#
+#     def __set__(self, instance, value):
+#         print("set")
+#         raise AttributeError("갱신이 불가합니다.")
+#
+#     def __delete__(self, instance):
+#         print("del")
+#         raise AttributeError("삭제가 불가합니다.")
 
 
 # noinspection PyMissingOrEmptyDocstring
@@ -149,13 +151,25 @@ class Page(metaclass=UserMeta):
     def code(self) -> str:
         return self._code
 
-    @code.setter
-    def code(self, code: str):
-        if all([isinstance(code, str), code.isnumeric(), int(code) > 0]):
+    @dispatch(str)
+    def code_setter(self, code: str):
+        if all([code.isnumeric(), int(code) > 0]):
             self._code = code
         else:
-            print_under_new_line(f"{self}.code를 {code}(으)로 바꿀 수 없어요.")
+            print_under_new_line(f"code 속성 값을 {code}(으)로 바꿀 수 없어요.")
             print("소설 번호를 자연수로 설정해 주세요.")
+
+    @dispatch(int)
+    def code_setter(self, code: int):
+        if code > 0:
+            self._code = str(code)
+        else:
+            print_under_new_line(f"code 속성 값을 {code}(으)로 바꿀 수 없어요.")
+            print("소설 번호를 자연수로 설정해 주세요.")
+
+    @code.setter
+    def code(self, code: str | int):
+        self.code_setter(code)
 
     @property
     def url(self) -> str:
@@ -164,7 +178,7 @@ class Page(metaclass=UserMeta):
     @url.setter
     def url(self, url: str):
         from requests import get, Response
-        from src.const.const import BASIC_HEADERS
+        from ..const.const import BASIC_HEADERS
 
         res: Response = get(url, headers=BASIC_HEADERS)
 
@@ -174,7 +188,7 @@ class Page(metaclass=UserMeta):
             print_under_new_line("[오류]", f"{ke = }")
             print(f"{type(self)}.url을 {url}(으)로 바꿀 수 없어요.")
         else:
-            from src.const.const import HOST
+            from ..const.const import HOST
 
             if domain == HOST:
                 self._url = url
@@ -188,12 +202,26 @@ class Page(metaclass=UserMeta):
     @ctime.setter
     def ctime(self, up_date_s: str):
         try:
-            datetime.fromisoformat(up_date_s)  # up_date_s: "2024-12-13"
+            datetime.fromisoformat(up_date_s)  # value: "2024-12-13"
         except TypeError as err:
             print_under_new_line("[오류]", f"{err = }")
             # raise
         else:
             self._ctime = up_date_s
+
+    @property
+    def mtime(self) -> str:
+        return self._mtime
+
+    @mtime.setter
+    def mtime(self, up_date_s: str):
+        try:
+            datetime.fromisoformat(up_date_s)  # value: "2024-12-13"
+        except TypeError as err:
+            print_under_new_line("[오류]", f"{err = }")
+            # raise
+        else:
+            self._mtime = up_date_s
 
     @property
     def got_time(self) -> str:
@@ -344,6 +372,27 @@ def assure_path_exists(path_to_assure: Path) -> None:
             break
 
 
+def extract_err_msg(err_group: ExceptionGroup) -> str:
+    """예외에서 메시지를 추출하는 함수
+
+    :param err_group: 예외
+    :return: 예외 메시지
+    """
+    from requests.exceptions import ConnectionError
+    from urllib3.exceptions import MaxRetryError
+
+    ce: ConnectionError = err_group.exceptions[0]
+    mre: MaxRetryError = ce.args[0]
+    err_msg: str = mre.reason.args[0]
+
+    start_index: int = err_msg.find("Failed")
+    end_index: int = err_msg.find("Errno")
+
+    msg: str = err_msg[start_index: end_index - 3]
+
+    return msg
+
+
 @contextmanager
 def get_novel_main_w_error(url: str):
     """서버에 소설의 메인 페이지를 요청하고, HTML 응답을 반환하는 함수
@@ -351,12 +400,11 @@ def get_novel_main_w_error(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    from src.const.const import BASIC_HEADERS
+    from ..const.const import BASIC_HEADERS
 
     npd_cookie, headers = add_npd_cookie(BASIC_HEADERS)
 
     from requests.exceptions import ConnectionError
-    from urllib3.exceptions import MaxRetryError
     from requests import get
 
     try:
@@ -366,14 +414,8 @@ def get_novel_main_w_error(url: str):
     # 연결 실패
     except* ConnectionError as err_group:
         # 오류 메시지 추출
-        ce: ConnectionError = err_group.exceptions[0]
-        mre: MaxRetryError = ce.args[0]
-        err_msg: str = mre.reason.args[0]
-
-        start_index: int = err_msg.find("Failed")
-        end_index: int = err_msg.find("Errno")
-
-        ce = ConnectionError(err_msg[start_index: end_index - 3])
+        msg: str = extract_err_msg(err_group)
+        ce = ConnectionError(msg)
 
         yield None, ce
         # raise re from err_group
@@ -397,7 +439,7 @@ def get_postposition(kr_word: str, postposition: str) -> str:
     한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
     참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
     """
-    from src.const.const import POSTPOSITIONS_NAMED_TUPLE
+    from ..const.const import POSTPOSITIONS_NAMED_TUPLE
 
     for v, c in zip(*POSTPOSITIONS_NAMED_TUPLE):
         if postposition in (v, c):
@@ -426,7 +468,7 @@ def load_json_w_error(res_json: str):
 
 
 @contextmanager
-def extract_alert_msg_w_error(html: str):
+def parse_alert_msg_w_error(html: str):
     """소설 페이지에서 알림 창의 오류 메시지를 추출하는 함수
 
     :param html: 소설 페이지 HTML
@@ -436,7 +478,7 @@ def extract_alert_msg_w_error(html: str):
 
     soup = Soup(html, PARSER)
     try:
-        from src.const.selector import NOVEL_ALERT_MSG_CSS
+        from ..const.selector import NOVEL_ALERT_MSG_CSS
 
         msg_tag = soup.select_one(NOVEL_ALERT_MSG_CSS)
 
@@ -496,7 +538,7 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
         asked_overwrite, can_overwrite = False, False
 
         # 덮어 쓸 지 질문
-        if not skip:
+        if not (skip or overwrite):
             question: str = "[확인] " + mtime + "에 수정된 파일이 있어요. 덮어 쓸까요?"
 
             from .userIO import input_permission
@@ -505,7 +547,7 @@ def opened_x_error(file_path: Path, mode: str = "xt", encoding: str = "utf-8", s
 
         # 덮어 쓰기
         if overwrite or (asked_overwrite and can_overwrite):
-            print_under_new_line("[알림]", file_path, "파일에 덮어 썼어요.")  # 기존 파일 有, 덮어쓰기
+            print_under_new_line("[알림]", file_path, "파일에 덮어 쓸게요.")  # 기존 파일 有, 덮어쓰기
             with opened_x_error(file_path, "wt", encoding, True, True) as (f, fe_in):
                 yield f, fe_in
 
