@@ -3,6 +3,8 @@ from contextlib import contextmanager
 
 from bs4.element import Tag
 
+from src.func.userIO import print_under_new_line
+
 
 @contextmanager
 def get_mybook_page_w_err(url: str):
@@ -11,8 +13,8 @@ def get_mybook_page_w_err(url: str):
     :param url: 요청 URL
     :return: HTML 응답, 접속 실패 시 None
     """
-    from src.const.const import BASIC_HEADERS
-    from src.func.common import add_login_key
+    from ..const.const import BASIC_HEADERS
+    from ..func.common import add_login_key
 
     # 구독 계정으로 로그인
     npd_cookie, headers = add_login_key(BASIC_HEADERS, True)
@@ -54,15 +56,15 @@ def extract_my_books(html: str):
     :param html: 내 서재 페이지 HTML
     """
     # HTML 응답 파싱
-    from src.func.common import PARSER
+    from ..func.common import PARSER
     from bs4 import BeautifulSoup as Soup
     from bs4.filter import SoupStrainer as Strainer
-    from src.const.selector import MY_BOOK_TABLE_ROW_CSS
+    from ..const.selector import MY_BOOK_TABLE_ROW_CSS
 
     only_my = Strainer("div", {"class": MY_BOOK_TABLE_ROW_CSS})
     my_soup = Soup(html, PARSER, parse_only=only_my).extract()
     # my_books = my_soup.select("div.novelbox", limit=30)
-    from src.const.selector import MY_BOOK_TITLE_CSS
+    from ..const.selector import MY_BOOK_TITLE_CSS
 
     only_title = Strainer("b", {"class": MY_BOOK_TITLE_CSS})
     titles = my_soup.find_all(only_title)
@@ -83,7 +85,7 @@ def extract_url(div_tag: Tag):
     return url_path
 
 
-def mybook_main():
+def mybook_main_old():
     """직접 실행할 때만 호출되는 메인 함수"""
     req_url: str = "https://novelpia.com/mybook/"
     with get_mybook_page_w_err(req_url) as (html, err):
@@ -96,22 +98,40 @@ def mybook_main():
     url_paths = map(extract_url, title_tags)
 
     from urllib.parse import urljoin
-    from src.const.const import HOST
+    from ..const.const import HOST
 
     count: int = len(title_tags)
     urls = (url for url in map(urljoin, [HOST] * count, url_paths))
 
-    from src.func.common import get_novel_main_w_error, print_under_new_line
+    from ..func.common import get_novel_main_w_error, print_under_new_line
 
     for i in range(count):
         with get_novel_main_w_error(next(urls)) as (html, err):
             if err:
                 print_under_new_line("[오류]", f"{err = }")
             else:
-                from src.novel_info import Novel, extract_novel_info, novel_to_md_file
+                from ..novel_info import Novel, parse_novel_page, novel_to_md_file
 
-                novel: Novel = extract_novel_info(html)
+                novel: Novel = parse_novel_page(html)
                 novel_to_md_file(novel, True, True)
+
+
+def mybook_main():
+    """직접 실행할 때만 호출되는 메인 함수"""
+    from ..novel_info import Novel, set_novel_from_likes, novel_to_md_file
+
+    # Novel 객체 생성
+    novels, count = set_novel_from_likes(2)
+
+    for i in range(count):
+        try:
+            novel: Novel = next(novels)
+        except StopIteration as si:
+            raise RuntimeError(mybook_main, f"{si = }")
+        else:
+            # Markdown 파일 열기
+            novel_to_md_file(novel, True, True)
+            print_under_new_line(f"{i + 1}번째 소설을 Markdown 파일에 썼어요.")
 
 
 if __name__ == "__main__":
