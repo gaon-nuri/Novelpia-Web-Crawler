@@ -81,9 +81,9 @@ def get_ep_content(ep_code: str) -> list[str] | None:
             from bs4 import BeautifulSoup
 
             # 오류 메시지 추출
-            from src.func.common import extract_alert_msg_w_error
+            from src.func.common import parse_alert_msg_w_error
 
-            with extract_alert_msg_w_error(ep_content) as (alert_msg, attr_err):
+            with parse_alert_msg_w_error(ep_content) as (alert_msg, attr_err):
                 if attr_err:
                     raise RuntimeError("작업 예정")
                 if alert_msg == "잘못된 소설 번호 입니다.":
