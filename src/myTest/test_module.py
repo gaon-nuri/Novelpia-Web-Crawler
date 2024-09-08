@@ -4,63 +4,63 @@ from os import environ
 from unittest import TestCase, main, skip
 
 
-@skip
-class TestDescriptorDeco(TestCase):
-    def test_descriptor_deco(self):
-        from src.func.common import Descriptor
-
-        class A:
-            @Descriptor
-            def sum(self, a1, a2, a3):
-                return a1 + a2 + a3
-
-        print(A.__dict__)
-        a = A()
-        print(a.sum(1, 2, 3))
-
-        self.assertTrue(True)
-
-
-@skip
-class TestNonDataDescriptor(TestCase):
-    def test_descriptor_nd(self):
-        from src.func.common import DescriptorND
-
-        class Nondata:
-            mul = DescriptorND(lambda x, y: x * y)
-
-        nd = Nondata()
-        print(nd.__dict__)
-        print(nd.mul)
-        print(nd.mul(2, 2))
-
-
-@skip
-class TestDataDescriptor(TestCase):
-    def test_i_mutable_attribute(self):
-        from src.func.common import MutableAttribute, ImmutableAttribute
-
-        class Circle:
-            pi = 3.1415
-            radius = MutableAttribute(10)
-            diameter = ImmutableAttribute(lambda x: x.radius * 2)
-
-            @ImmutableAttribute
-            def circumference(self):
-                return self.pi * self.radius * 2
-
-            @ImmutableAttribute
-            def area(self):
-                return self.pi * self.radius ** 2
-
-        c = Circle()
-        print(c.radius, c.diameter)
-        print(c.circumference, c.area)
-
-        c.radius = 100
-        print(c.radius, c.area)
-
-        self.assertTrue(True)
+# @skip
+# class TestDescriptorDeco(TestCase):
+#     def test_descriptor_deco(self):
+#         from src.func.common import Descriptor
+#
+#         class A:
+#             @Descriptor
+#             def sum(self, a1, a2, a3):
+#                 return a1 + a2 + a3
+#
+#         print(A.__dict__)
+#         a = A()
+#         print(a.sum(1, 2, 3))
+#
+#         self.assertTrue(True)
+#
+#
+# @skip
+# class TestNonDataDescriptor(TestCase):
+#     def test_descriptor_nd(self):
+#         from src.func.common import DescriptorND
+#
+#         class Nondata:
+#             mul = DescriptorND(lambda x, y: x * y)
+#
+#         nd = Nondata()
+#         print(nd.__dict__)
+#         print(nd.mul)
+#         print(nd.mul(2, 2))
+#
+#
+# @skip
+# class TestDataDescriptor(TestCase):
+#     def test_i_mutable_attribute(self):
+#         from src.func.common import MutableAttribute, ImmutableAttribute
+#
+#         class Circle:
+#             pi = 3.1415
+#             radius = MutableAttribute(10)
+#             diameter = ImmutableAttribute(lambda x: x.radius * 2)
+#
+#             @ImmutableAttribute
+#             def circumference(self):
+#                 return self.pi * self.radius * 2
+#
+#             @ImmutableAttribute
+#             def area(self):
+#                 return self.pi * self.radius ** 2
+#
+#         c = Circle()
+#         print(c.radius, c.diameter)
+#         print(c.circumference, c.area)
+#
+#         c.radius = 100
+#         print(c.radius, c.area)
+#
+#         self.assertTrue(True)
 
 
 class TestGetEnvVar(TestCase):
