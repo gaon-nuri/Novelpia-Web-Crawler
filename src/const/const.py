@@ -5,13 +5,15 @@ from collections import namedtuple
 
 # Windows Chrome User-Agent String
 UA: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
-BASIC_HEADERS: dict = {"User-Agent": UA}
+BASIC_HEADERS: dict = {
+    "User-Agent": UA
+}
 
 PARSER: str = "html.parser"  # bs4 용 파이썬 내장 파서
 
 HOST: str = "https://novelpia.com"
 
-DEFAULT_TIME: str = "0000-00-00"
+DEFAULT_TIME: str = "0000-00-00T00:00"
 
 ################################################################################
 # src.func.module
