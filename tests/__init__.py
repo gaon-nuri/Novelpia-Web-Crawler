@@ -1,10 +1,10 @@
-# from src.myTest import test_module
-# from src.myTest import test_novel_info
+# from src.tests import test_module
+# from src.tests import test_novel_info
 
 
 # def load_tests(loader, tests, pattern):
-#     from src.myTest.test_module import CntNovelWithPrologue
-#     from src.myTest.test_novel_info import CntNovelInStatus, CntNoEpNovel
+#     from src.tests.test_module import CntNovelWithPrologue
+#     from src.tests.test_novel_info import CntNovelInStatus, CntNoEpNovel
 #
 #     test_cases: tuple = (CntNovelWithPrologue, CntNovelInStatus, CntNoEpNovel)
 #     suite = unittest.TestSuite()
