@@ -163,8 +163,7 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
     if novel_code:
         novel_cnt, novel_dic_gen = novel_dic_gen_from_mem(mem_no)
         novel_gen = novel_gen_from_dic_gen(novel_dic_gen)
-        for novel_obj in novel_gen:
-            pass
+        novel_obj = next(novel_gen)
     else:
         novel_cnt, novel_dic_li = novel_dic_li_from_mem(mem_no)
         if novel_cnt != 1:
