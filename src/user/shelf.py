@@ -161,15 +161,15 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
     mem_no: int = load_mem_no_from_env(log_kind)
     novel_obj: Optional[Novel] = None
     if novel_code:
-        novel_cnt, novel_dic_gen = novel_dic_gen_from_mem(mem_no)
-        novel_gen = novel_gen_from_dic_gen(novel_dic_gen)
+        novel_cnt, dic_gen = novel_dic_gen_from_mem(mem_no)
+        novel_gen = novel_gen_from_dic_gen(dic_gen)
         novel_obj = next(novel_gen)
     else:
-        novel_cnt, novel_dic_li = novel_dic_li_from_mem(mem_no)
+        novel_cnt, dic_li = novel_dic_li_from_mem(mem_no)
         if novel_cnt != 1:
             err = ValueError("잘못된 선호작 수량")
             raise log_and_return_error(err)
-        novel_dic: dict[str, Optional[int|str]] = novel_dic_li[-1]
+        novel_dic: dict[str, Optional[int|str]] = dic_li[-1]
         novel_obj = novel_from_dic(novel_dic, 0)
     
     if not novel_obj:
