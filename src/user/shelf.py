@@ -152,21 +152,67 @@ def req_data_from_params(csrf_token: str, novel_code: str):
 
 
 def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple[Novel, int]:
-    """좋아요 목록에서 소설을 설정하는 로직
+    """ 회원의 선호작 중 특정 소설 객체를 반환하는 함수
 
-    :param novel_code: 소설 번호
-    :param log_kind: 로그인 유형 (1은 일반 계정, 2는 구독 계정)
-    :return: Novel 객체 제너레이터, 선호작 수
+    Args:
+        log_kind (int): 로그인 유형 (0은 비 로그인, 1은 일반 계정, 2는 구독 계정)
+        novel_code (Optional[str], optional): 소설 번호.
+            - 기본값은 None으로, 이 경우 가장 최근 소설을 반환합니다.
+
+    Returns:
+        tuple[Novel, int]: 소설 객체와 선호작 수
     """
-    mem_no: int = load_mem_no_from_env(log_kind)
-    if novel_code:
-        novel_cnt, dic_gen = novel_dic_gen_from_mem(mem_no)
-        novel_obj = next(novel_gen_from_dic_gen(dic_gen))
-    else:
-        novel_cnt, dic_li = novel_dic_li_from_mem(mem_no)
-        if novel_cnt != 1:
+    def check_novel_count(cnt: int) -> None:
+        """ 선호작 수량을 확인하는 함수
+
+        Args:
+            cnt (int): 선호작 수량
+
+        Raises:
+            ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
+        """
+        if cnt == 0:
+            raise log_and_return_error(ValueError("선호작이 없어요."))
+        if cnt != 1:
             raise log_and_return_error(ValueError("잘못된 선호작 수량"))
-        novel_obj = novel_from_dic(dic_li[-1], 0)
+
+    def find_novel(num: int, code: str) -> tuple[Novel, int]:
+        """ 회원의 선호작 중 특정 소설 객체를 반환하는 함수
+
+        Args:
+            num (int): 회원 번호
+            code (str): 소설 번호
+
+        Raises:
+            ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
+
+        Returns:
+            tuple[Novel, int]: 소설 객체와 선호작 수
+        """
+        cnt, dic_gen = novel_dic_gen_from_mem(num)
+        check_novel_count(cnt)
+        return next(novel_gen_from_dic_gen(dic_gen)), cnt
+    
+    def get_any_novel(num: int) -> tuple[Novel, int]:
+        """ 회원의 선호작 중 가장 최근 소설 객체를 반환하는 함수
+
+        Args:
+            num (int): 회원 번호
+
+        Raises:
+            ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
+        
+        Returns:
+            tuple[Novel, int]: 소설 객체와 선호작 수
+        """
+        cnt, dic_li = novel_dic_li_from_mem(num)
+        check_novel_count(cnt)
+        return novel_from_dic(dic_li[-1], 0), cnt
+    
+    mem_no: int = load_mem_no_from_env(log_kind)
+    novel_obj, novel_cnt = (
+        find_novel(mem_no, novel_code)
+    ) if novel_code else get_any_novel(mem_no)
     
     if not novel_obj:
         raise ValueError("소설 객체를 생성하지 못했어요.")
