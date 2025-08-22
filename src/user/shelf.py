@@ -56,17 +56,20 @@ def toggle_novel_alarm(do_login, novel_code):
 
 
 def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
+    def setup_req_data() -> dict:
+        from dotenv import dotenv_values
+        config = dotenv_values()
+        csrf_token: Optional[str] = config.get("CSRF_SUB")
+        if not csrf_token:
+            err_msg = "CSRF 문자열을 환경 변수에서 찾을 수 없어요."
+            raise log_and_return_error(NoValueError(err_msg))
+        return req_data_from_params(csrf_token, novel_code)
+
     stat_name_en, stat_name_kr = stat_names
     rel_url: str = "/proc/novel_" + stat_name_en
     abs_url: str = abs_url_from_rel_url(rel_url)
 
-    from dotenv import dotenv_values
-    config = dotenv_values()
-    csrf_token: Optional[str] = config.get("CSRF_SUB")
-    if not csrf_token:
-        err_msg = "CSRF 문자열을 환경 변수에서 찾을 수 없어요."
-        raise log_and_return_error(NoValueError(err_msg))
-    req_data: dict = req_data_from_params(csrf_token, novel_code)
+    req_data: dict = setup_req_data()
 
     from requests import Response
     res: Response = res_from_post_req(abs_url, req_data)
