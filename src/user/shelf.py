@@ -56,6 +56,8 @@ def toggle_novel_alarm(do_login, novel_code):
 
 
 def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
+    from requests import Response
+
     def setup_req_data() -> dict:
         from dotenv import dotenv_values
         csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
@@ -64,24 +66,35 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             raise log_and_return_error(NoValueError(err_msg))
         return req_data_from_params(csrf_token, novel_code)
 
+    def parse_response(res: Response) -> tuple[list[str], int]:
+        """
+        응답을 파싱하여 상태와 통계 수를 반환하는 함수
+        
+        :param res: HTTP 응답 객체
+        :return: 상태 코드 리스트와 통계 수
+        :raises ParseResError: 응답 파싱 중 오류 발생 시
+        :raises ReqNovelError: 요청 소설 작업 중 오류 발생 시
+        """
+        from src.exceptions import ParseResError
+        try:
+            # {'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}
+            flags: list[str] = res.text.split("|")
+            return flags, int(flags[1])
+
+        except AttributeError as ae:
+            raise ParseResError("[오류]", ae)
+        except IndexError as ie:
+            raise ParseResError("[오류]", ie)
+        except Exception as err:
+            raise ReqNovelError("[오류]", err)
+
     stat_name_en, stat_name_kr = stat_names
     abs_url = abs_url_from_rel_url(f"/proc/novel_{stat_name_en}")
     req_data: dict = setup_req_data()
 
-    from requests import Response
-    res: Response = res_from_post_req(abs_url, req_data)
-    from src.exceptions import ParseResError
-    try:
-        # {'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}
-        flag_li: list[str] = res.text.split("|")
-        stats = int(flag_li[1])
-
-    except AttributeError as ae:
-        raise ParseResError("[오류]", ae)
-    except IndexError as ie:
-        raise ParseResError("[오류]", ie)
-    except Exception as err:
-        raise ReqNovelError("[오류]", err)
+    response: Response = res_from_post_req(abs_url, req_data)
+    
+    flag_li, stats = parse_response(response)
 
     from func.common import suffix_from_words
     suffix: str = suffix_from_words(stat_name_kr, "을")
