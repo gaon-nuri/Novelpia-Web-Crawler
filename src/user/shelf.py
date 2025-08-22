@@ -94,7 +94,7 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str], req_data: dic
 
 def req_data_from_params(csrf_token: str, novel_code: str):
     if csrf_token:
-        req_data_dic: dict = {"novel_no": novel_code, "csrf_token": csrf_token, }
+        req_data_dic: dict = {"novel_no": novel_code, "csrf": csrf_token, }
         return req_data_dic
     else:
         err_msg = "CSRF 문자열을 입력받지 못했어요."
