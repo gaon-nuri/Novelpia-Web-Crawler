@@ -34,12 +34,8 @@ def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0):
 
 
 def toggle_novel_like(novel_code):
-    from dotenv import dotenv_values
-    config = dotenv_values()
-    csrf_token: str = config["CSRF"]
-    req_data: dict = req_data_from_params(csrf_token, novel_code)
     stat_names = "like", "선호"
-    return toggle_novel_act(novel_code, stat_names, req_data)
+    return toggle_novel_act(novel_code, stat_names)
 
 
 def toggle_novel_alarm(do_login, novel_code):
@@ -50,10 +46,15 @@ def toggle_novel_alarm(do_login, novel_code):
     return toggle_novel_act(novel_code, stat_names)
 
 
-def toggle_novel_act(novel_code: str, stat_names: tuple[str, str], req_data: dict[str:str]):
+def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
     stat_name_en, stat_name_kr = stat_names
     rel_url: str = "/proc/novel_" + stat_name_en
     abs_url: str = abs_url_from_rel_url(rel_url)
+
+    from dotenv import dotenv_values
+    config = dotenv_values()
+    csrf_token: str = config["CSRF"]
+    req_data: dict = req_data_from_params(csrf_token, novel_code)
 
     from requests import Response
     res: Response = res_from_post_req(abs_url, req_data)
