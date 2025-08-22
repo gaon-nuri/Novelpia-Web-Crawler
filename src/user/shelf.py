@@ -232,17 +232,32 @@ def novel_gen_from_dic_gen(novel_dic_gen):
 
 
 def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
+    def fetch_stat(act_type: int) -> int:
+        """소설 알람 또는 선호작 수를 가져오는 함수.
+
+        Args:
+            act_type (int): 1은 알람, 2는 선호작
+
+        Returns:
+            int: 소설 알람 또는 선호작 수
+
+        Raises:
+            AssertionError: 로그인 필요 시 발생
+
+        Example:
+            >>> fetch_stat(1)
+            5 # 알람 수
+            >>> fetch_stat(2)
+            10 # 선호작 수
+        """
+        success, stats = pick_novel_act(novel_code, act_type, 1)
+        assert success == 3
+        return stats
+
     novel_code: str = str(novel_dic["novel_no"])
-    act_alarm: int = 1
-    success, alarms = pick_novel_act(novel_code, act_alarm, 1)
-    assert success == 3
 
-    act_like: int = 2
-    success, likes = pick_novel_act(novel_code, act_like, 1)
-    assert success == 3
-
-    novel_dic["count_alarm"] = alarms
-    novel_dic["count_like"] = likes
+    novel_dic["count_alarm"] = fetch_stat(1) # 1: 알람
+    novel_dic["count_like"] = fetch_stat(2)  # 2: 선호작
 
     logger.info(f"{novel_dic_no + 1}번째 소설로 Novel 객체를 생성했어요.")
     return Novel(novel_dic)
