@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from logging import getLogger
-from typing import cast, Any, Optional
+from typing import cast, Any, Generator, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
@@ -245,5 +245,4 @@ def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -
     novel_dic["count_like"] = likes
 
     logger.info(f"{novel_dic_no + 1}번째 소설로 Novel 객체를 생성했어요.")
-    novel = Novel(novel_dic)
-    return novel
+    return Novel(novel_dic)
