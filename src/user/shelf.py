@@ -134,7 +134,7 @@ def novel_dic_gen_from_mem(mem_no: int, novel_cnt: int = -1):
     if novel_cnt != -1:
         assert novel_dic_cnt == novel_cnt
     novel_dic_gen: Generator[dict[str:str]] = (dic for dic in novel_dic_li)
-    return novel_cnt, novel_dic_gen
+    return len(novel_dic_li), novel_dic_gen
 
 
 def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str:str]]]:
