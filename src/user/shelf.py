@@ -213,22 +213,19 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     return novel_cnt, novel_dic_li
 
 
-def novel_gen_from_dic_gen(novel_dic_gen):
-    """소설 정보가 담긴 Dict를 Novel 객체로 변환하는 함수
+def novel_gen_from_dic_gen(dic_gen):
+    """ 소설 정보 딕셔너리 제너레이터로부터 Novel 객체를 생성하는 제너레이터 함수
 
-    :param novel_dic_gen: 소설 정보가 담긴 Dict 목록
-    :return: Novel 객체
+    Args:
+        dic_gen (_type_): 소설 정보 딕셔너리 제너레이터
+
+    Raises:
+        StopIteration: 선호작이 없을 때 발생
+
+    Yields:
+        Novel: Novel 객체
     """
-    novels: list[Novel] = []
-    try:
-        for novel_dic_no, novel_dic in enumerate(novel_dic_gen):
-            novel: Novel = novel_from_dic(novel_dic, novel_dic_no)
-            novels.append(novel)
-            yield from novels
-    # 선호작 X
-    except StopIteration as err:
-        err.add_note("선호작이 없습니다.")
-        raise log_and_return_error(err)
+    yield from [novel_from_dic(dic, num) for num, dic in enumerate(dic_gen)]
 
 
 def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
