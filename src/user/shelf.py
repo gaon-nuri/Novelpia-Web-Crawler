@@ -53,7 +53,7 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
 
     from dotenv import dotenv_values
     config = dotenv_values()
-    csrf_token: str = config["CSRF"]
+    csrf_token: str = config["CSRF_SUB"]
     req_data: dict = req_data_from_params(csrf_token, novel_code)
 
     from requests import Response
