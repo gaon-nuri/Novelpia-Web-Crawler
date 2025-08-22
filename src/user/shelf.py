@@ -6,7 +6,6 @@ from typing import cast, Any, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
-from func.crawl import abs_url_from_rel_url, res_from_post_req
 from novel_info import Novel
 
 logger = getLogger(__name__)
@@ -57,14 +56,24 @@ def toggle_novel_alarm(do_login, novel_code):
 
 def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
     from requests import Response
+    from func.crawl import abs_url_from_rel_url, res_from_post_req
 
-    def setup_req_data() -> dict:
-        from dotenv import dotenv_values
-        csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
-        if not csrf_token:
-            err_msg = "CSRF 문자열을 환경 변수에서 찾을 수 없어요."
-            raise log_and_return_error(NoValueError(err_msg))
-        return req_data_from_params(csrf_token, novel_code)
+    def fetch_stat(stat_name: str) -> Response:
+        """상태 이름에 따라 POST 요청을 보내는 함수
+
+        :param stat_name: 상태 이름 (예: 'alarm', 'like')
+        :return: HTTP 응답 객체
+        """
+        def setup_req_data() -> dict:
+            from dotenv import dotenv_values
+            csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
+            if not csrf_token:
+                err_msg = "CSRF 문자열을 환경 변수에서 찾을 수 없어요."
+                raise log_and_return_error(NoValueError(err_msg))
+            return req_data_from_params(csrf_token, novel_code)
+
+        abs_url = abs_url_from_rel_url(f"/proc/novel_{stat_name}")
+        return res_from_post_req(abs_url, setup_req_data())
 
     def parse_response(res: Response) -> tuple[list[str], int]:
         """
@@ -118,10 +127,8 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
                 raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
 
     stat_name_en, stat_name_kr = stat_names
-    abs_url = abs_url_from_rel_url(f"/proc/novel_{stat_name_en}")
-    req_data: dict = setup_req_data()
 
-    response: Response = res_from_post_req(abs_url, req_data)
+    response: Response = fetch_stat(stat_name_en)
     
     flag_li, stats = parse_response(response)
 
