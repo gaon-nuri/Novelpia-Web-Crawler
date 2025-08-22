@@ -11,6 +11,17 @@ from novel_info import Novel
 logger = getLogger(__name__)
 
 
+def log_and_return_error(exception: Exception) -> Exception:
+    """
+    로그를 남기고 예외를 발생시키는 함수
+
+    :param exception: 발생시킬 예외 객체
+    :return: 예외 객체
+    """
+    logger.error(exception)
+    return exception
+
+
 def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0) -> tuple[int, int]:
     """소설 알람 또는 선호작 설정을 등록/해제하는 함수
 
@@ -28,9 +39,7 @@ def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0) -> tuple[
         return toggle_novel_like(novel_code)
     else:
         err_msg = "구현되지 않은 설정 번호"
-        nie = NotImplementedError(err_msg)
-        logger.error(nie)
-        raise nie
+        raise log_and_return_error(NotImplementedError(err_msg))
 
 
 def toggle_novel_like(novel_code):
@@ -56,9 +65,7 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
     csrf_token: Optional[str] = config.get("CSRF_SUB")
     if not csrf_token:
         err_msg = "CSRF 문자열을 환경 변수에서 찾을 수 없어요."
-        no_val_err = NoValueError(err_msg)
-        logger.error(no_val_err)
-        raise no_val_err
+        raise log_and_return_error(NoValueError(err_msg))
     req_data: dict = req_data_from_params(csrf_token, novel_code)
 
     from requests import Response
@@ -105,9 +112,7 @@ def req_data_from_params(csrf_token: str, novel_code: str):
         return req_data_dic
     else:
         err_msg = "CSRF 문자열을 입력받지 못했어요."
-        ule = NoValueError(err_msg)
-        logger.error(ule)
-        raise ule
+        raise log_and_return_error(NoValueError(err_msg))
 
 
 def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple[Novel, int]:
@@ -128,9 +133,7 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
         novel_cnt, novel_dic_li = novel_dic_li_from_mem(mem_no)
         if novel_cnt != 1:
             err_msg = "잘못된 선호작 수량"
-            ve = ValueError(err_msg)
-            logger.error(ve)
-            raise ve
+            raise log_and_return_error(ValueError(err_msg))
         novel_dic: dict[str, Optional[int|str]] = novel_dic_li[-1]
         novel_obj = novel_from_dic(novel_dic, 0)
     
@@ -163,8 +166,8 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
         res_dic: dict[str, Any] = dic_from_json(res_json)
         """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
     except JSONDecodeError as je:
-        logger.error(je)
-        raise
+        je.add_note("JSON 파싱 오류")
+        raise log_and_return_error(je)
     # {'novel': [{ ... }], 'allCount': 2}
     result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
     novel_cnt = result_dic["allCount"]
@@ -188,8 +191,8 @@ def novel_gen_from_dic_gen(novel_dic_gen):
             yield from novels
     # 선호작 X
     except StopIteration as si:
-        logger.error(si)
-        raise
+        si.add_note("선호작이 없습니다.")
+        raise log_and_return_error(si)
 
 
 def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
