@@ -1,5 +1,6 @@
 """소설 알람, 선호작 설정/해제 관련 코드"""
 
+from enum import IntEnum
 from logging import getLogger
 from typing import cast, Any, Optional
 
@@ -85,23 +86,26 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
 
     from func.common import suffix_from_words
     suffix: str = suffix_from_words(stat_name_kr, "을")
-    toggle_on: int = 1
-    toggle_off: int = 2
-    toggle_login: int = 3
+
+    # 상태 코드 정의
+    class ToggleNovelAct(IntEnum):
+        ON = 1
+        OFF = 2
+        LOGIN = 3
 
     msg: str # to avoid mypy error: no-redef
     if flag_li[0] == "on":  # on|1896||0
         msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
         logger.info(msg)
-        return toggle_on, stats
+        return ToggleNovelAct.ON, stats
     elif flag_li[0] == "off":  # off|1895||
         msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
         logger.info(msg)
-        return toggle_off, stats
+        return ToggleNovelAct.OFF, stats
     elif flag_li[0] == "login":
         le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
         logger.error(le)
-        return toggle_login, stats
+        return ToggleNovelAct.LOGIN, stats
     else:
         raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
 
