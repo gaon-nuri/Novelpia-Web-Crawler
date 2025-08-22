@@ -1,7 +1,7 @@
 """소설 알람, 선호작 설정/해제 관련 코드"""
 
 from logging import getLogger
-from typing import Generator, Optional
+from typing import cast, Any, Generator, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
@@ -11,7 +11,7 @@ from novel_info import Novel
 logger = getLogger(__name__)
 
 
-def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0):
+def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0) -> tuple[int, int]:
     """소설 알람 또는 선호작 설정을 등록/해제하는 함수
 
     :param novel_code: 소설 번호
@@ -53,7 +53,12 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
 
     from dotenv import dotenv_values
     config = dotenv_values()
-    csrf_token: str = config["CSRF_SUB"]
+    csrf_token: Optional[str] = config.get("CSRF_SUB")
+    if not csrf_token:
+        err_msg = "CSRF 문자열을 환경 변수에서 찾을 수 없어요."
+        no_val_err = NoValueError(err_msg)
+        logger.error(no_val_err)
+        raise no_val_err
     req_data: dict = req_data_from_params(csrf_token, novel_code)
 
     from requests import Response
@@ -77,12 +82,13 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
     toggle_off: int = 2
     toggle_login: int = 3
 
+    msg: str # to avoid mypy error: no-redef
     if flag_li[0] == "on":  # on|1896||0
-        msg: str = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
+        msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
         logger.info(msg)
         return toggle_on, stats
     elif flag_li[0] == "off":  # off|1895||
-        msg: str = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
+        msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
         logger.info(msg)
         return toggle_off, stats
     elif flag_li[0] == "login":
@@ -104,16 +110,16 @@ def req_data_from_params(csrf_token: str, novel_code: str):
         raise ule
 
 
-def novel_gen_from_mem(log_kind: int, novel_code: str = None):
+def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple[Novel, int]:
     """좋아요 목록에서 소설을 설정하는 로직
 
     :param novel_code: 소설 번호
     :param log_kind: 로그인 유형 (1은 일반 계정, 2는 구독 계정)
     :return: Novel 객체 제너레이터, 선호작 수
     """
-    mem_no = load_mem_no_from_env(log_kind)
+    mem_no: int = load_mem_no_from_env(log_kind)
+    novel_obj: Optional[Novel] = None
     if novel_code:
-        novel_obj: Optional[Novel] = None
         novel_cnt, novel_dic_gen = novel_dic_gen_from_mem(mem_no)
         novel_gen = novel_gen_from_dic_gen(novel_dic_gen)
         for novel_obj in novel_gen:
@@ -125,8 +131,12 @@ def novel_gen_from_mem(log_kind: int, novel_code: str = None):
             ve = ValueError(err_msg)
             logger.error(ve)
             raise ve
-        novel_dic: dict[str:str] = novel_dic_li[-1]
+        novel_dic: dict[str, Optional[int|str]] = novel_dic_li[-1]
         novel_obj = novel_from_dic(novel_dic, 0)
+    
+    if not novel_obj:
+        err_msg = "소설 객체를 생성하지 못했어요."
+        raise ValueError(err_msg)
     return novel_obj, novel_cnt
 
 
@@ -134,11 +144,11 @@ def novel_dic_gen_from_mem(mem_no: int, novel_cnt: int = -1):
     novel_dic_cnt, novel_dic_li = novel_dic_li_from_mem(mem_no)
     if novel_cnt != -1:
         assert novel_dic_cnt == novel_cnt
-    novel_dic_gen: Generator[dict[str:str]] = (dic for dic in novel_dic_li)
+    novel_dic_gen: Generator[dict[str, Optional[int|str]]] = (dic for dic in novel_dic_li)
     return len(novel_dic_li), novel_dic_gen
 
 
-def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str:str]]]:
+def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int|str]]]]:
     """회원의 선호작 정보를 서버에 요청하고 파싱한 응답을 반환하는 함수
 
     :param mem_no: 회원 번호
@@ -150,19 +160,21 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str:str]]]:
     from json import loads as dic_from_json
     from json import JSONDecodeError
     try:
-        res_dic = dic_from_json(res_json)
+        res_dic: dict[str, Any] = dic_from_json(res_json)
         """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
     except JSONDecodeError as je:
         logger.error(je)
         raise
     # {'novel': [{ ... }], 'allCount': 2}
-    result_dic: dict[str] = res_dic["result"]
-    novel_cnt: int = result_dic["allCount"]
-    novel_dic_li: list[dict[str:str]] = result_dic["novel"]
+    result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
+    novel_cnt = result_dic["allCount"]
+    novel_cnt = cast(int, novel_cnt)
+    novel_dic_li = result_dic["novel"]
+    novel_dic_li = cast(list[dict[str, Optional[int|str]]], novel_dic_li)
     return novel_cnt, novel_dic_li
 
 
-def novel_gen_from_dic_gen(novel_dic_gen: Generator):
+def novel_gen_from_dic_gen(novel_dic_gen: Generator[dict[str, Optional[int|str]]]) -> Generator[Novel]:
     """소설 정보가 담긴 Dict를 Novel 객체로 변환하는 함수
 
     :param novel_dic_gen: 소설 정보가 담긴 Dict 목록
@@ -171,7 +183,7 @@ def novel_gen_from_dic_gen(novel_dic_gen: Generator):
     novels: list[Novel] = []
     try:
         for novel_dic_no, novel_dic in enumerate(novel_dic_gen):
-            novel = novel_from_dic(novel_dic, novel_dic_no)
+            novel: Novel = novel_from_dic(novel_dic, novel_dic_no)
             novels.append(novel)
             yield from novels
     # 선호작 X
@@ -180,7 +192,7 @@ def novel_gen_from_dic_gen(novel_dic_gen: Generator):
         raise
 
 
-def novel_from_dic(novel_dic, novel_dic_no) -> Novel:
+def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
     novel_code: str = str(novel_dic["novel_no"])
     act_alarm: int = 1
     success, alarms = pick_novel_act(novel_code, act_alarm, 1)
