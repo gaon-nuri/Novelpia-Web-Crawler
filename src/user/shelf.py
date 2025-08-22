@@ -213,7 +213,12 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     return novel_cnt, novel_dic_li
 
 
-def novel_gen_from_dic_gen(dic_gen):
+def novel_gen_from_dic_gen(
+    dic_gen: Generator[
+                dict[
+                    str,
+                    Optional[int | str]
+            ]]) -> Generator[Novel, None, None]:
     """ 소설 정보 딕셔너리 제너레이터로부터 Novel 객체를 생성하는 제너레이터 함수
 
     Args:
