@@ -31,16 +31,15 @@ def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0) -> tuple[
     :param log_kind: 로그인 유형 (0은 비 로그인, 1은 일반 계정, 2는 구독 계정)
     :return: 상태 코드 (등록: 1, 해제: 2, 로그인 필요: 3), 최종 알람/선호 수
     """
-    set_alarm: bool = (novel_act == 1)
-    set_like: bool = (novel_act == 2)
     do_login: bool = (log_kind != 0)
-    if set_alarm:
-        return toggle_novel_alarm(do_login, novel_code)
-    elif set_like and do_login:
-        return toggle_novel_like(novel_code)
-    else:
-        err_msg = "구현되지 않은 설정 번호"
-        raise log_and_return_error(NotImplementedError(err_msg))
+    match novel_act:
+        case 1:             # 알람 설정
+            return toggle_novel_alarm(do_login, novel_code)
+        case 2 if do_login: # 선호작 설정 (로그인 필요)
+            return toggle_novel_like(novel_code)
+        case _:
+            err_msg = "구현되지 않은 설정 번호"
+            raise log_and_return_error(NotImplementedError(err_msg))
 
 
 def toggle_novel_like(novel_code):
@@ -94,20 +93,21 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         LOGIN = 3
 
     msg: str # to avoid mypy error: no-redef
-    if flag_li[0] == "on":  # on|1896||0
-        msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
-        logger.info(msg)
-        return ToggleNovelAct.ON, stats
-    elif flag_li[0] == "off":  # off|1895||
-        msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
-        logger.info(msg)
-        return ToggleNovelAct.OFF, stats
-    elif flag_li[0] == "login":
-        le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
-        logger.error(le)
-        return ToggleNovelAct.LOGIN, stats
-    else:
-        raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
+    match flag_li[0]:
+        case "on":  # on|1896||0
+            msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
+            logger.info(msg)
+            return ToggleNovelAct.ON, stats
+        case "off":  # off|1895||
+            msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
+            logger.info(msg)
+            return ToggleNovelAct.OFF, stats
+        case "login":
+            le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
+            logger.error(le)
+            return ToggleNovelAct.LOGIN, stats
+        case _:
+            raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
 
 
 def req_data_from_params(csrf_token: str, novel_code: str):
