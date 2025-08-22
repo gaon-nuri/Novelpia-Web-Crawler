@@ -1,8 +1,8 @@
 multipledispatch~=1.0.0
 beautifulsoup4~=4.13.0b2
 requests~=2.32.3
-tenacity~=9.0.0
-pytest~=8.3.3
-python-dotenv~=1.0.1
+tenacity~=9.1.2
+pytest~=8.4.1
+python-dotenv~=1.1.1
 fake-useragent>=1.5.1
-urllib3~=2.2.3
+urllib3~=2.5.0
