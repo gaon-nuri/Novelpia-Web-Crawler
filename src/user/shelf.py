@@ -1,7 +1,7 @@
 """소설 알람, 선호작 설정/해제 관련 코드"""
 
 from logging import getLogger
-from typing import cast, Any, Generator, Optional
+from typing import cast, Any, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
@@ -144,7 +144,7 @@ def novel_dic_gen_from_mem(mem_no: int, novel_cnt: int = -1):
     novel_dic_cnt, novel_dic_li = novel_dic_li_from_mem(mem_no)
     if novel_cnt != -1:
         assert novel_dic_cnt == novel_cnt
-    novel_dic_gen: Generator[dict[str, Optional[int|str]]] = (dic for dic in novel_dic_li)
+    novel_dic_gen = (dic for dic in novel_dic_li)
     return len(novel_dic_li), novel_dic_gen
 
 
@@ -174,7 +174,7 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     return novel_cnt, novel_dic_li
 
 
-def novel_gen_from_dic_gen(novel_dic_gen: Generator[dict[str, Optional[int|str]]]) -> Generator[Novel]:
+def novel_gen_from_dic_gen(novel_dic_gen):
     """소설 정보가 담긴 Dict를 Novel 객체로 변환하는 함수
 
     :param novel_dic_gen: 소설 정보가 담긴 Dict 목록
