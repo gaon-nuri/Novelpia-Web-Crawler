@@ -206,10 +206,8 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
         raise log_and_return_error(err)
     # {'novel': [{ ... }], 'allCount': 2}
     result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
-    novel_cnt = result_dic["allCount"]
-    novel_cnt = cast(int, novel_cnt)
-    novel_dic_li = result_dic["novel"]
-    novel_dic_li = cast(list[dict[str, Optional[int|str]]], novel_dic_li)
+    novel_cnt = cast(int, result_dic["allCount"])
+    novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
     return novel_cnt, novel_dic_li
 
 
