@@ -50,7 +50,7 @@ def toggle_novel_alarm(do_login, novel_code):
     return toggle_novel_act(novel_code, stat_names)
 
 
-def toggle_novel_act(novel_code: str, stat_names: tuple[str, str], req_data: dict[str:str] = None):
+def toggle_novel_act(novel_code: str, stat_names: tuple[str, str], req_data: dict[str:str]):
     stat_name_en, stat_name_kr = stat_names
     rel_url: str = "/proc/novel_" + stat_name_en
     abs_url: str = abs_url_from_rel_url(rel_url)
