@@ -310,6 +310,8 @@ def log_header_from_default_header(headers: dict[str: str], plus: bool = False) 
     env_var_name: str = LOG_KEY_NAME
     if plus:
         env_var_name += "_PLUS"
+    else:
+        env_var_name += "_SUB"
     from src.func.common import load_env_var_from_name
     log_key = load_env_var_from_name(env_var_name)
     cookie: str = "LOGINKEY=" + log_key

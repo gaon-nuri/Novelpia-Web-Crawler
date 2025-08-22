@@ -73,9 +73,9 @@ def load_mem_no_from_env(log_kind) -> int:
     sub_mem: int = 1
     plus_mem: int = 2
     if log_kind == sub_mem:
-        env_var_name: str = "SUB_MEM_NO"
+        env_var_name: str = "MEM_NO_SUB"
     elif log_kind == plus_mem:
-        env_var_name: str = "PLUS_MEM_NO"
+        env_var_name: str = "MEM_NO_PLUS"
     assert env_var_name
     mem_code = load_env_var_from_name(env_var_name)
     mem_no = int(mem_code)
