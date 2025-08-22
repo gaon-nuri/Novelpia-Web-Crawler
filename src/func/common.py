@@ -60,7 +60,7 @@ def suffix_from_words(kr_word: str, suffix: str) -> str:
     한글 글자 인덱스 = (초성 인덱스 * 21 + 중성 인덱스) * 28 + 종성 인덱스 + 0xAC00\n
     참고: https://en.wikipedia.org/wiki/Korean_language_and_computers#Hangul_in_Unicode
     """
-    from ..const.const import SUFFIX_NAMED_TU
+    from const.const import SUFFIX_NAMED_TU
     for v, c in zip(*SUFFIX_NAMED_TU):
         if suffix in (v, c):
             if ends_with_vowel:

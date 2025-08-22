@@ -1,10 +1,10 @@
 # novel_crawler/main.py
 """프로그램의 진입점을 정의합니다."""
 
-from src.file_io import create_file_from_string, set_md_str_from_novel, set_path_from_novel_infos
-from src.func.userio import get_num_from_input
-from src.models import Novel
-from src.user.shelf import novel_gen_from_mem
+from file_io import create_file_from_string, set_md_str_from_novel, set_path_from_novel_infos
+from func.userio import get_num_from_input
+from models import Novel
+from user.shelf import novel_gen_from_mem
 
 
 def novel_obj_from_code(novel_code: str) -> Novel:

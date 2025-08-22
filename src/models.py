@@ -5,7 +5,7 @@ from datetime import datetime
 from logging import getLogger
 from typing import Optional
 
-from src.const.const import BASE_TIME
+from const.const import BASE_TIME
 
 logger = getLogger(__name__)
 

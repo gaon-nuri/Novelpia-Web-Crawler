@@ -3,10 +3,10 @@
 from logging import getLogger
 from typing import Generator, Optional
 
-from ..exceptions import NoValueError, NotLoggedInError, ReqNovelError
-from ..func.common import load_mem_no_from_env
-from ..func.crawl import abs_url_from_rel_url, res_from_post_req
-from ..novel_info import Novel
+from exceptions import NoValueError, NotLoggedInError, ReqNovelError
+from func.common import load_mem_no_from_env
+from func.crawl import abs_url_from_rel_url, res_from_post_req
+from novel_info import Novel
 
 logger = getLogger(__name__)
 
@@ -70,7 +70,7 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str], req_data: dic
     except Exception as err:
         raise ReqNovelError("[오류]", err)
 
-    from ..func.common import suffix_from_words
+    from func.common import suffix_from_words
     suffix: str = suffix_from_words(stat_name_kr, "을")
     toggle_on: int = 1
     toggle_off: int = 2

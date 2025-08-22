@@ -3,7 +3,7 @@ from logging import getLogger
 
 from bs4.element import Tag
 
-from .models import Novel
+from models import Novel
 
 logger = getLogger(__name__)
 

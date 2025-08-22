@@ -5,8 +5,8 @@ from logging import getLogger
 from pathlib import Path
 from typing import Optional
 
-from .exceptions import WriteFileError
-from .models import Novel
+from exceptions import WriteFileError
+from models import Novel
 
 logger = getLogger(__name__)
 
