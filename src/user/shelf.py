@@ -161,6 +161,13 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
 
     Returns:
         tuple[Novel, int]: 소설 객체와 선호작 수
+    
+    Raises:
+        ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
+        NoValueError: CSRF 문자열을 환경 변수에서 찾을 수 없을 때 발생
+        NotLoggedInError: 로그인 필요 시 발생
+        ReqNovelError: 요청 소설 작업 중 오류 발생 시
+        StopIteration: 선호작이 없을 때 발생
     """
     def check_novel_count(cnt: int) -> None:
         """ 선호작 수량을 확인하는 함수
