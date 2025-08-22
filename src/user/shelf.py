@@ -168,6 +168,21 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
         NotLoggedInError: 로그인 필요 시 발생
         ReqNovelError: 요청 소설 작업 중 오류 발생 시
         StopIteration: 선호작이 없을 때 발생
+    
+    Todo:
+        - 예외 처리 개선: 각 예외에 대한 구체적인 메시지와 로그
+        - 매개변수 처리: novel_code가 None일 때의 처리 로직 개선
+        - 타입 힌트 추가: 함수 매개변수와 반환값에 대한 타입 힌트 추가
+        - 문서화: 함수와 매개변수에 대한 자세한 설명 추가
+        - 테스트 케이스 작성: 각 함수에 대한 단위 테스트 케이스 작성
+        - 코드 스타일 개선: PEP 8 스타일 가이드에 맞게 코드 정리
+        - 성능 최적화: 소설 정보 요청 및 파싱 과정에서의 성능 최적화
+        - 예외 처리: JSON 파싱 오류, 요청 실패 등의 예외 처리 개선
+        - 로깅: 각 단계에서의 로깅 추가 및 개선
+        - 타입 안정성: Optional 타입을 사용하는 부분에서의 타입 안정성 확보
+        - 코드 중복 제거: novel_dic_gen_from_mem와 novel_dic_li_from_mem 함수의 중복 코드 제거
+        - 함수 이름 개선: 함수 이름을 더 명확하게 변경
+        - 코드 리팩토링: 전체적인 코드 구조 개선 및 리팩토링
     """
     def check_novel_count(cnt: int) -> None:
         """ 선호작 수량을 확인하는 함수
