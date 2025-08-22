@@ -180,7 +180,7 @@ def novel_gen_from_dic_gen(novel_dic_gen: Generator):
 
 
 def novel_from_dic(novel_dic, novel_dic_no) -> Novel:
-    novel_code: str = novel_dic["novel_no"]
+    novel_code: str = str(novel_dic["novel_no"])
     act_alarm: int = 1
     success, alarms = pick_novel_act(novel_code, act_alarm, 1)
     assert success == 3
