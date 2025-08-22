@@ -88,6 +88,35 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         except Exception as err:
             raise ReqNovelError("[오류]", err)
 
+    def log_result_and_return_flag(flag: str) -> int:
+        """결과를 로그에 남기고 상태 코드를 반환하는 함수
+
+        Args:
+            flag (str): 상태 코드 (on|off|login)
+
+        Raises:
+            ReqNovelError: 요청 소설 작업 중 오류 발생 시
+
+        Returns:
+            int: 상태 코드
+        """
+        msg: str # to avoid mypy error: no-redef
+        match flag:
+            case "on":  # 예: on|1896||0
+                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
+                logger.info(msg)
+                return ToggleNovelAct.ON
+            case "off":  # 예: off|1895||
+                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
+                logger.info(msg)
+                return ToggleNovelAct.OFF
+            case "login":
+                le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
+                logger.error(le)
+                return ToggleNovelAct.LOGIN
+            case _:
+                raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
+
     stat_name_en, stat_name_kr = stat_names
     abs_url = abs_url_from_rel_url(f"/proc/novel_{stat_name_en}")
     req_data: dict = setup_req_data()
@@ -105,22 +134,7 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         OFF = 2
         LOGIN = 3
 
-    msg: str # to avoid mypy error: no-redef
-    match flag_li[0]:
-        case "on":  # on|1896||0
-            msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
-            logger.info(msg)
-            return ToggleNovelAct.ON, stats
-        case "off":  # off|1895||
-            msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
-            logger.info(msg)
-            return ToggleNovelAct.OFF, stats
-        case "login":
-            le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
-            logger.error(le)
-            return ToggleNovelAct.LOGIN, stats
-        case _:
-            raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
+    return log_result_and_return_flag(flag_li[0]), stats
 
 
 def req_data_from_params(csrf_token: str, novel_code: str):
