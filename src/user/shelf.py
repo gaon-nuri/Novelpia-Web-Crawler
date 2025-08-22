@@ -197,9 +197,9 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
         from json import loads as dic_from_json
         from json import JSONDecodeError
         try:
-            res_dic: dict[str, Any] = dic_from_json(res_json)
+            dic: dict[str, Any] = dic_from_json(json_str)
             """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
-            return res_dic
+            return dic
         except JSONDecodeError as err:
             err.add_note("JSON 파싱 오류")
             raise log_and_return_error(err)
