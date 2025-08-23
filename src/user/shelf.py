@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from logging import getLogger
-from typing import cast, Any, Optional
+from typing import cast, Any, Generator, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
@@ -255,57 +255,75 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     :param mem_no: 회원 번호
     :return: 선호작 수, 소설 정보 목록들
     """
+    def parse_json(json_str: str) -> dict[str, Any]:
+        from json import loads as dic_from_json
+        from json import JSONDecodeError
+        try:
+            dic: dict[str, Any] = dic_from_json(json_str)
+            """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
+            return dic
+        except JSONDecodeError as err:
+            err.add_note("JSON 파싱 오류")
+            raise log_and_return_error(err)
+    
     from src.func.crawl import fav_novel_json_from_mem
     res_json = fav_novel_json_from_mem(mem_no)
 
-    from json import loads as dic_from_json
-    from json import JSONDecodeError
-    try:
-        res_dic: dict[str, Any] = dic_from_json(res_json)
-        """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
-    except JSONDecodeError as err:
-        err.add_note("JSON 파싱 오류")
-        raise log_and_return_error(err)
     # {'novel': [{ ... }], 'allCount': 2}
+    res_dic = parse_json(res_json)
     result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
-    novel_cnt = result_dic["allCount"]
-    novel_cnt = cast(int, novel_cnt)
-    novel_dic_li = result_dic["novel"]
-    novel_dic_li = cast(list[dict[str, Optional[int|str]]], novel_dic_li)
+    novel_cnt = cast(int, result_dic["allCount"])
+    novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
     return novel_cnt, novel_dic_li
 
 
-def novel_gen_from_dic_gen(novel_dic_gen):
-    """소설 정보가 담긴 Dict를 Novel 객체로 변환하는 함수
+def novel_gen_from_dic_gen(
+    dic_gen: Generator[
+                dict[
+                    str,
+                    Optional[int | str]
+            ]]) -> Generator[Novel, None, None]:
+    """ 소설 정보 딕셔너리 제너레이터로부터 Novel 객체를 생성하는 제너레이터 함수
 
-    :param novel_dic_gen: 소설 정보가 담긴 Dict 목록
-    :return: Novel 객체
+    Args:
+        dic_gen (_type_): 소설 정보 딕셔너리 제너레이터
+
+    Raises:
+        StopIteration: 선호작이 없을 때 발생
+
+    Yields:
+        Novel: Novel 객체
     """
-    novels: list[Novel] = []
-    try:
-        for novel_dic_no, novel_dic in enumerate(novel_dic_gen):
-            novel: Novel = novel_from_dic(novel_dic, novel_dic_no)
-            novels.append(novel)
-            yield from novels
-    # 선호작 X
-    except StopIteration as err:
-        err.add_note("선호작이 없습니다.")
-        raise log_and_return_error(err)
+    yield from [novel_from_dic(dic, num) for num, dic in enumerate(dic_gen)]
 
 
 def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
+    def fetch_stat(act_type: int) -> int:
+        """소설 알람 또는 선호작 수를 가져오는 함수.
+
+        Args:
+            act_type (int): 1은 알람, 2는 선호작
+
+        Returns:
+            int: 소설 알람 또는 선호작 수
+
+        Raises:
+            AssertionError: 로그인 필요 시 발생
+
+        Example:
+            >>> fetch_stat(1)
+            5 # 알람 수
+            >>> fetch_stat(2)
+            10 # 선호작 수
+        """
+        success, stats = pick_novel_act(novel_code, act_type, 1)
+        assert success == 3
+        return stats
+
     novel_code: str = str(novel_dic["novel_no"])
-    act_alarm: int = 1
-    success, alarms = pick_novel_act(novel_code, act_alarm, 1)
-    assert success == 3
 
-    act_like: int = 2
-    success, likes = pick_novel_act(novel_code, act_like, 1)
-    assert success == 3
-
-    novel_dic["count_alarm"] = alarms
-    novel_dic["count_like"] = likes
+    novel_dic["count_alarm"] = fetch_stat(1) # 1: 알람
+    novel_dic["count_like"] = fetch_stat(2)  # 2: 선호작
 
     logger.info(f"{novel_dic_no + 1}번째 소설로 Novel 객체를 생성했어요.")
-    novel = Novel(novel_dic)
-    return novel
+    return Novel(novel_dic)
