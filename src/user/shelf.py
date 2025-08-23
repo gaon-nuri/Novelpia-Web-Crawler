@@ -118,8 +118,8 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
                 logger.info(msg)
                 return enum
             case "login":
-                le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
-                logger.error(le)
+                msg = f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요."
+                logger.error(NotLoggedInError(msg))
                 return ToggleNovelAct.LOGIN
             case _:
                 raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
