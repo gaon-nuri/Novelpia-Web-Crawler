@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from logging import getLogger
-from typing import cast, Any, Generator, Optional
+from typing import cast, Any, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
@@ -225,7 +225,10 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
         """
         cnt, dic_gen = novel_dic_gen_from_mem(num)
         check_novel_count(cnt)
-        return next(novel_gen_from_dic_gen(dic_gen)), cnt
+        novel_gen = (novel_from_dic(dic, num)
+                     for num, dic
+                     in enumerate(dic_gen))
+        return next(novel_gen), cnt
     
     def get_any_novel(num: int) -> tuple[Novel, int]:
         """ 회원의 선호작 중 가장 최근 소설 객체를 반환하는 함수
@@ -287,26 +290,6 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     novel_cnt = cast(int, result_dic["allCount"])
     novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
     return novel_cnt, novel_dic_li
-
-
-def novel_gen_from_dic_gen(
-    dic_gen: Generator[
-                dict[
-                    str,
-                    Optional[int | str]
-            ]]) -> Generator[Novel, None, None]:
-    """ 소설 정보 딕셔너리 제너레이터로부터 Novel 객체를 생성하는 제너레이터 함수
-
-    Args:
-        dic_gen (_type_): 소설 정보 딕셔너리 제너레이터
-
-    Raises:
-        StopIteration: 선호작이 없을 때 발생
-
-    Yields:
-        Novel: Novel 객체
-    """
-    yield from [novel_from_dic(dic, num) for num, dic in enumerate(dic_gen)]
 
 
 def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
