@@ -206,8 +206,8 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
             tuple[Novel, int]: 소설 객체와 선호작 수
         """
         novel_dic_cnt, novel_dic_li = novel_dic_li_from_mem(num)
-        if novel_cnt != -1:
-            assert novel_dic_cnt == novel_cnt
+        if num != -1:
+            assert novel_dic_cnt == num
         cnt, dic_gen = len(novel_dic_li), (dic for dic in novel_dic_li)
         novel_gen = (novel_from_dic(dic, num)
                      for num, dic
