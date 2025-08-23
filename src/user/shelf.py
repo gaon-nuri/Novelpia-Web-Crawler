@@ -108,13 +108,8 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             # {'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}
             flags: list[str] = res.text.split("|")
             return flags, int(flags[1])
-
-        except AttributeError as ae:
-            raise ParseResError("[오류]", ae)
-        except IndexError as ie:
-            raise ParseResError("[오류]", ie)
-        except Exception as err:
-            raise ReqNovelError("[오류]", err)
+        except (AttributeError, IndexError) as err:
+            raise ParseResError("[오류]", err)
 
     def log_result_and_return_flag(flag: str) -> int:
         """결과를 로그에 남기고 상태 코드를 반환하는 함수
@@ -130,17 +125,15 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         """
         msg: str # to avoid mypy error: no-redef
         match flag:
-            case "on":  # 예: on|1896||0
-                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
+            case "on" | "off":  # 예: on|1896||0, off|1895||
+                act = "등록" if flag == "on" else "해제"
+                enum = ToggleNovelAct.ON if flag == "on" else ToggleNovelAct.OFF
+                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} {act}했어요."
                 logger.info(msg)
-                return ToggleNovelAct.ON
-            case "off":  # 예: off|1895||
-                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
-                logger.info(msg)
-                return ToggleNovelAct.OFF
+                return enum
             case "login":
-                le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
-                logger.error(le)
+                msg = f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요."
+                logger.error(NotLoggedInError(msg))
                 return ToggleNovelAct.LOGIN
             case _:
                 raise ReqNovelError(toggle_novel_act, f"{stat_name_kr} 설정 실패")
