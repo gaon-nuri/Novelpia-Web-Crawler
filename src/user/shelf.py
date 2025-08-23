@@ -111,14 +111,12 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         """
         msg: str # to avoid mypy error: no-redef
         match flag:
-            case "on":  # 예: on|1896||0
-                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 등록했어요."
+            case "on" | "off":  # 예: on|1896||0, off|1895||
+                act = "등록" if flag == "on" else "해제"
+                enum = ToggleNovelAct.ON if flag == "on" else ToggleNovelAct.OFF
+                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} {act}했어요."
                 logger.info(msg)
-                return ToggleNovelAct.ON
-            case "off":  # 예: off|1895||
-                msg = f"{novel_code}번 소설의 {stat_name_kr}{suffix} 해제했어요."
-                logger.info(msg)
-                return ToggleNovelAct.OFF
+                return enum
             case "login":
                 le = NotLoggedInError(f"{stat_name_kr} 설정을 위해서는 로그인이 필요해요.")
                 logger.error(le)
