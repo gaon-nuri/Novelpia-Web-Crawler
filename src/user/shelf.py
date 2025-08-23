@@ -67,10 +67,10 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         def setup_req_data() -> dict:
             from dotenv import dotenv_values
             csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
-            if not csrf_token:
-                err = NoValueError("CSRF 문자열을 환경 변수에서 찾을 수 없어요.")
-                raise log_and_return_error(err)
-            return req_data_from_params(csrf_token, novel_code)
+            if csrf_token:
+                return req_data_from_params(csrf_token, novel_code)
+            err = NoValueError("CSRF 문자열을 환경 변수에서 찾을 수 없어요.")
+            raise log_and_return_error(err)
 
         abs_url = abs_url_from_rel_url(f"/proc/novel_{stat_name}")
         return res_from_post_req(abs_url, setup_req_data())
