@@ -82,6 +82,11 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             Raises:
                 NoValueError: CSRF 문자열을 환경 변수에서 찾을 수 없을 때 발생
             """
+            def req_data_from_params(csrf: str, code: str):
+                if csrf:
+                    return {"novel_no": code, "csrf": csrf}
+                raise log_and_return_error(NoValueError("CSRF 문자열을 받지 못했어요."))
+
             from dotenv import dotenv_values
             csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
             if csrf_token:
@@ -154,13 +159,6 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
     return log_result_and_return_flag(flag_li[0]), stats
 
 
-def req_data_from_params(csrf_token: str, novel_code: str):
-    if csrf_token:
-        return {"novel_no": novel_code, "csrf": csrf_token}
-    err = NoValueError("CSRF 문자열을 입력받지 못했어요.")
-    raise log_and_return_error(err)
-
-
 def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple[Novel, int]:
     """ 회원의 선호작 중 특정 소설 객체를 반환하는 함수
 
@@ -207,7 +205,10 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
         Returns:
             tuple[Novel, int]: 소설 객체와 선호작 수
         """
-        cnt, dic_gen = novel_dic_gen_from_mem(num)
+        novel_dic_cnt, novel_dic_li = novel_dic_li_from_mem(num)
+        if novel_cnt != -1:
+            assert novel_dic_cnt == novel_cnt
+        cnt, dic_gen = len(novel_dic_li), (dic for dic in novel_dic_li)
         novel_gen = (novel_from_dic(dic, num)
                      for num, dic
                      in enumerate(dic_gen))
@@ -227,7 +228,70 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
         """
         cnt, dic_li = novel_dic_li_from_mem(num)
         return novel_from_dic(dic_li[-1], 0), cnt
-    
+
+    def novel_dic_li_from_mem(num: int) -> tuple[int, list[dict[str, Optional[int | str]]]]:
+        """회원의 선호작 정보를 서버에 요청하고 파싱한 응답을 반환하는 함수
+
+        :param num: 회원 번호
+        :return: 선호작 수, 소설 정보 목록들
+        """
+        def validate_novel_count(cnt: int) -> int:
+            """ 선호작 수량을 검증하는 함수
+
+            Args:
+                cnt (int): 선호작 수량
+
+            Returns:
+                int: 검증된 선호작 수량
+
+            Raises:
+                ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
+            """
+            if cnt == 0:
+                raise log_and_return_error(ValueError("선호작이 없어요."))
+            if cnt != 1:
+                raise log_and_return_error(ValueError("잘못된 선호작 수량"))
+            return cnt
+
+        from src.func.crawl import fav_novel_json_from_mem
+        from json import loads
+        # {'novel': [{ ... }], 'allCount': 2}
+        res_dic: dict[str, Any] = loads(fav_novel_json_from_mem(num))
+        result_dic: dict[str, Any] = res_dic["result"]
+        return validate_novel_count(result_dic["allCount"]), result_dic["novel"]
+
+    def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
+        def fetch_stat(_code: str, act_type: int) -> int:
+            """소설 알람 또는 선호작 수를 가져오는 함수.
+
+            Args:
+                _code (str): 소설 번호
+                act_type (int): 1은 알람, 2는 선호작
+
+            Returns:
+                int: 소설 알람 또는 선호작 수
+
+            Raises:
+                AssertionError: 로그인 필요 시 발생
+
+            Example:
+                >>> fetch_stat(1)
+                5 # 알람 수
+                >>> fetch_stat(2)
+                10 # 선호작 수
+            """
+            success, stats = pick_novel_act(_code, act_type, 1)
+            assert success == 3
+            return stats
+
+        code: str = str(novel_dic["novel_no"])
+
+        novel_dic["count_alarm"] = fetch_stat(code, 1) # 1: 알람
+        novel_dic["count_like"] = fetch_stat(code,2)  # 2: 선호작
+
+        logger.info(f"{novel_dic_no + 1}번째 소설로 Novel 객체를 생성했어요.")
+        return Novel(novel_dic)
+
     mem_no: int = load_mem_no_from_env(log_kind)
     novel_obj, novel_cnt = (
         find_novel(mem_no, novel_code)
@@ -236,75 +300,3 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
     if not novel_obj:
         raise ValueError("소설 객체를 생성하지 못했어요.")
     return novel_obj, novel_cnt
-
-
-def novel_dic_gen_from_mem(mem_no: int, novel_cnt: int = -1):
-    novel_dic_cnt, novel_dic_li = novel_dic_li_from_mem(mem_no)
-    if novel_cnt != -1:
-        assert novel_dic_cnt == novel_cnt
-    novel_dic_gen = (dic for dic in novel_dic_li)
-    return len(novel_dic_li), novel_dic_gen
-
-
-def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int|str]]]]:
-    """회원의 선호작 정보를 서버에 요청하고 파싱한 응답을 반환하는 함수
-
-    :param mem_no: 회원 번호
-    :return: 선호작 수, 소설 정보 목록들
-    """
-    def validate_novel_count(cnt: int) -> int:
-        """ 선호작 수량을 검증하는 함수
-
-        Args:
-            cnt (int): 선호작 수량
-
-        Returns:
-            int: 검증된 선호작 수량
-
-        Raises:
-            ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
-        """
-        if cnt == 0:
-            raise log_and_return_error(ValueError("선호작이 없어요."))
-        if cnt != 1:
-            raise log_and_return_error(ValueError("잘못된 선호작 수량"))
-        return cnt
-
-    from src.func.crawl import fav_novel_json_from_mem
-    from json import loads
-    # {'novel': [{ ... }], 'allCount': 2}
-    res_dic: dict[str, Any] = loads(fav_novel_json_from_mem(mem_no))
-    result_dic: dict[str, Any] = res_dic["result"]
-    return validate_novel_count(result_dic["allCount"]), result_dic["novel"]
-
-
-def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
-    def fetch_stat(act_type: int) -> int:
-        """소설 알람 또는 선호작 수를 가져오는 함수.
-
-        Args:
-            act_type (int): 1은 알람, 2는 선호작
-
-        Returns:
-            int: 소설 알람 또는 선호작 수
-
-        Raises:
-            AssertionError: 로그인 필요 시 발생
-
-        Example:
-            >>> fetch_stat(1)
-            5 # 알람 수
-            >>> fetch_stat(2)
-            10 # 선호작 수
-        """
-        success, stats = pick_novel_act(novel_code, act_type, 1)
-        assert success == 3
-        return stats
-
-    novel_code: str = str(novel_dic["novel_no"])
-
-    novel_dic["count_alarm"] = fetch_stat(1) # 1: 알람
-    novel_dic["count_like"] = fetch_stat(2)  # 2: 선호작
-
-    logger.info(f"{novel_dic_no + 1}번째 소설로 Novel 객체를 생성했어요.")
-    return Novel(novel_dic)
