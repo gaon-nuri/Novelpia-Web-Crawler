@@ -91,8 +91,6 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             return flags, int(flags[1])
         except (AttributeError, IndexError) as err:
             raise ParseResError("[오류]", err)
-        except Exception as err:
-            raise ReqNovelError("[오류]", err)
 
     def log_result_and_return_flag(flag: str) -> int:
         """결과를 로그에 남기고 상태 코드를 반환하는 함수
