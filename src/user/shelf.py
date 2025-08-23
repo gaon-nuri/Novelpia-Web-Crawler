@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from logging import getLogger
-from typing import cast, Any, Optional
+from typing import Any, Optional
 
 from exceptions import NoValueError, NotLoggedInError, ReqNovelError
 from func.common import load_mem_no_from_env
@@ -254,22 +254,14 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     :param mem_no: 회원 번호
     :return: 선호작 수, 소설 정보 목록들
     """
-    def parse_json(json_str: str) -> dict[str, Any]:
-        from json import loads as dic_from_json
-        from json import JSONDecodeError
-        try:
-            dic: dict[str, Any] = dic_from_json(json_str)
-            """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
-            return dic
-        except JSONDecodeError as err:
-            err.add_note("JSON 파싱 오류")
-            raise log_and_return_error(err)
-    
-    def check_novel_count(cnt: int) -> None:
-        """ 선호작 수량을 확인하는 함수
+    def validate_novel_count(cnt: int) -> int:
+        """ 선호작 수량을 검증하는 함수
 
         Args:
             cnt (int): 선호작 수량
+
+        Returns:
+            int: 검증된 선호작 수량
 
         Raises:
             ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
@@ -278,17 +270,14 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
             raise log_and_return_error(ValueError("선호작이 없어요."))
         if cnt != 1:
             raise log_and_return_error(ValueError("잘못된 선호작 수량"))
+        return cnt
 
     from src.func.crawl import fav_novel_json_from_mem
-    res_json = fav_novel_json_from_mem(mem_no)
-
+    from json import loads
     # {'novel': [{ ... }], 'allCount': 2}
-    res_dic = parse_json(res_json)
-    result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
-    novel_cnt = cast(int, result_dic["allCount"])
-    novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
-    check_novel_count(novel_cnt)
-    return novel_cnt, novel_dic_li
+    res_dic: dict[str, Any] = loads(fav_novel_json_from_mem(mem_no))
+    result_dic: dict[str, Any] = res_dic["result"]
+    return validate_novel_count(result_dic["allCount"]), result_dic["novel"]
 
 
 def novel_from_dic(novel_dic: dict[str, Optional[int|str]], novel_dic_no: int) -> Novel:
