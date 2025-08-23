@@ -84,6 +84,11 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             Raises:
                 NoValueError: CSRF 문자열을 환경 변수에서 찾을 수 없을 때 발생
             """
+            def req_data_from_params(csrf: str, code: str):
+                if csrf:
+                    return {"novel_no": code, "csrf": csrf}
+                raise log_and_return_error(NoValueError("CSRF 문자열을 받지 못했어요."))
+
             from dotenv import dotenv_values
             csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
             if csrf_token:
@@ -154,13 +159,6 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
         LOGIN = 3
 
     return log_result_and_return_flag(flag_li[0]), stats
-
-
-def req_data_from_params(csrf_token: str, novel_code: str):
-    if csrf_token:
-        return {"novel_no": novel_code, "csrf": csrf_token}
-    err = NoValueError("CSRF 문자열을 입력받지 못했어요.")
-    raise log_and_return_error(err)
 
 
 def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple[Novel, int]:
