@@ -30,6 +30,17 @@ def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0) -> tuple[
     :param log_kind: 로그인 유형 (0은 비 로그인, 1은 일반 계정, 2는 구독 계정)
     :return: 상태 코드 (등록: 1, 해제: 2, 로그인 필요: 3), 최종 알람/선호 수
     """
+    def toggle_novel_like(code):
+        stat_names = "like", "선호"
+        return toggle_novel_act(code, stat_names)
+
+    def toggle_novel_alarm(do_log_in, code):
+        stat_name_en, stat_name_kr = "alarm", "알람"
+        if not do_log_in:
+            logger.error(f"비 로그인 모드. {stat_name_kr} 수만 추출할게요.")
+        stat_names = stat_name_en, stat_name_kr
+        return toggle_novel_act(code, stat_names)
+
     do_login: bool = (log_kind != 0)
     match novel_act:
         case 1:             # 알람 설정
@@ -39,19 +50,6 @@ def pick_novel_act(novel_code: str, novel_act: int, log_kind: int = 0) -> tuple[
         case _:
             err = NotImplementedError("구현되지 않은 설정 번호")
             raise log_and_return_error(err)
-
-
-def toggle_novel_like(novel_code):
-    stat_names = "like", "선호"
-    return toggle_novel_act(novel_code, stat_names)
-
-
-def toggle_novel_alarm(do_login, novel_code):
-    stat_name_en, stat_name_kr = "alarm", "알람"
-    if not do_login:
-        logger.error(f"비 로그인 모드. {stat_name_kr} 수만 추출할게요.")
-    stat_names = stat_name_en, stat_name_kr
-    return toggle_novel_act(novel_code, stat_names)
 
 
 def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
