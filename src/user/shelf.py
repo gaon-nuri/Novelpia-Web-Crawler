@@ -89,11 +89,8 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             # {'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}
             flags: list[str] = res.text.split("|")
             return flags, int(flags[1])
-
-        except AttributeError as ae:
-            raise ParseResError("[오류]", ae)
-        except IndexError as ie:
-            raise ParseResError("[오류]", ie)
+        except (AttributeError, IndexError) as err:
+            raise ParseResError("[오류]", err)
         except Exception as err:
             raise ReqNovelError("[오류]", err)
 
