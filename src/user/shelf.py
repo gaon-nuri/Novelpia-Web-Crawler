@@ -58,22 +58,22 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
     from requests import Response
     from func.crawl import abs_url_from_rel_url, res_from_post_req
 
-    def fetch_stat(stat_name: str) -> Response:
+    def fetch_stat(stat_name: str, _novel_code: str) -> Response:
         """상태 이름에 따라 POST 요청을 보내는 함수
 
         :param stat_name: 상태 이름 (예: 'alarm', 'like')
         :return: HTTP 응답 객체
         """
-        def setup_req_data() -> dict:
+        def setup_req_data(__novel_code: str) -> dict:
             from dotenv import dotenv_values
             csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
             if csrf_token:
-                return req_data_from_params(csrf_token, novel_code)
+                return req_data_from_params(csrf_token, __novel_code)
             err = NoValueError("CSRF 문자열을 환경 변수에서 찾을 수 없어요.")
             raise log_and_return_error(err)
 
         abs_url = abs_url_from_rel_url(f"/proc/novel_{stat_name}")
-        return res_from_post_req(abs_url, setup_req_data())
+        return res_from_post_req(abs_url, setup_req_data(_novel_code))
 
     def parse_response(res: Response) -> tuple[list[str], int]:
         """
@@ -128,7 +128,7 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
 
     stat_name_en, stat_name_kr = stat_names
 
-    response: Response = fetch_stat(stat_name_en)
+    response: Response = fetch_stat(stat_name_en, novel_code)
     
     flag_li, stats = parse_response(response)
 
