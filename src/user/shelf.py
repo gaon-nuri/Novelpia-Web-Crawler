@@ -196,20 +196,6 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
         - 함수 이름 개선: 함수 이름을 더 명확하게 변경
         - 코드 리팩토링: 전체적인 코드 구조 개선 및 리팩토링
     """
-    def check_novel_count(cnt: int) -> None:
-        """ 선호작 수량을 확인하는 함수
-
-        Args:
-            cnt (int): 선호작 수량
-
-        Raises:
-            ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
-        """
-        if cnt == 0:
-            raise log_and_return_error(ValueError("선호작이 없어요."))
-        if cnt != 1:
-            raise log_and_return_error(ValueError("잘못된 선호작 수량"))
-
     def find_novel(num: int, code: str) -> tuple[Novel, int]:
         """ 회원의 선호작 중 특정 소설 객체를 반환하는 함수
 
@@ -224,7 +210,6 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
             tuple[Novel, int]: 소설 객체와 선호작 수
         """
         cnt, dic_gen = novel_dic_gen_from_mem(num)
-        check_novel_count(cnt)
         novel_gen = (novel_from_dic(dic, num)
                      for num, dic
                      in enumerate(dic_gen))
@@ -243,7 +228,6 @@ def novel_gen_from_mem(log_kind: int, novel_code: Optional[str] = None) -> tuple
             tuple[Novel, int]: 소설 객체와 선호작 수
         """
         cnt, dic_li = novel_dic_li_from_mem(num)
-        check_novel_count(cnt)
         return novel_from_dic(dic_li[-1], 0), cnt
     
     mem_no: int = load_mem_no_from_env(log_kind)
@@ -281,6 +265,20 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
             err.add_note("JSON 파싱 오류")
             raise log_and_return_error(err)
     
+    def check_novel_count(cnt: int) -> None:
+        """ 선호작 수량을 확인하는 함수
+
+        Args:
+            cnt (int): 선호작 수량
+
+        Raises:
+            ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
+        """
+        if cnt == 0:
+            raise log_and_return_error(ValueError("선호작이 없어요."))
+        if cnt != 1:
+            raise log_and_return_error(ValueError("잘못된 선호작 수량"))
+
     from src.func.crawl import fav_novel_json_from_mem
     res_json = fav_novel_json_from_mem(mem_no)
 
@@ -289,6 +287,7 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
     novel_cnt = cast(int, result_dic["allCount"])
     novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
+    check_novel_count(novel_cnt)
     return novel_cnt, novel_dic_li
 
 
