@@ -254,11 +254,14 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     :param mem_no: 회원 번호
     :return: 선호작 수, 소설 정보 목록들
     """
-    def check_novel_count(cnt: int) -> None:
+    def check_novel_count(cnt: int) -> int:
         """ 선호작 수량을 확인하는 함수
 
         Args:
             cnt (int): 선호작 수량
+
+        Returns:
+            int: 선호작 수량
 
         Raises:
             ValueError: 선호작이 없거나 잘못된 선호작 수량일 때 발생
@@ -267,6 +270,7 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
             raise log_and_return_error(ValueError("선호작이 없어요."))
         if cnt != 1:
             raise log_and_return_error(ValueError("잘못된 선호작 수량"))
+        return cnt
 
     from src.func.crawl import fav_novel_json_from_mem
     """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
@@ -278,7 +282,7 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
     novel_cnt = cast(int, result_dic["allCount"])
     novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
-    check_novel_count(novel_cnt)
+    novel_cnt = check_novel_count(novel_cnt)
     return novel_cnt, novel_dic_li
 
 
