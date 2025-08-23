@@ -72,7 +72,18 @@ def toggle_novel_act(novel_code: str, stat_names: tuple[str, str]):
             NoValueError: CSRF 문자열을 환경 변수에서 찾을 수 없을 때 발생
             ReqNovelError: 요청 소설 작업 중 오류 발생 시
         """
-        def setup_req_data(__novel_code: str) -> dict:
+        def setup_req_data(__novel_code: str) -> dict[str, str]:
+            """ 요청 데이터를 설정하는 함수
+
+            Args:
+                __novel_code (str): 소설 번호
+
+            Returns:
+                dict[str, str]: 요청 데이터 딕셔너리
+
+            Raises:
+                NoValueError: CSRF 문자열을 환경 변수에서 찾을 수 없을 때 발생
+            """
             from dotenv import dotenv_values
             csrf_token: Optional[str] = dotenv_values().get("CSRF_SUB")
             if csrf_token:
