@@ -254,17 +254,6 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
     :param mem_no: 회원 번호
     :return: 선호작 수, 소설 정보 목록들
     """
-    def parse_json(json_str: str) -> dict[str, Any]:
-        from json import loads as dic_from_json
-        from json import JSONDecodeError
-        try:
-            dic: dict[str, Any] = dic_from_json(json_str)
-            """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
-            return dic
-        except JSONDecodeError as err:
-            err.add_note("JSON 파싱 오류")
-            raise log_and_return_error(err)
-    
     def check_novel_count(cnt: int) -> None:
         """ 선호작 수량을 확인하는 함수
 
@@ -280,10 +269,12 @@ def novel_dic_li_from_mem(mem_no: int) -> tuple[int, list[dict[str, Optional[int
             raise log_and_return_error(ValueError("잘못된 선호작 수량"))
 
     from src.func.crawl import fav_novel_json_from_mem
+    """{'status': '200', 'errmsg': '', {'novel': [{ ... }], 'allCount': 2}}"""
     res_json = fav_novel_json_from_mem(mem_no)
 
     # {'novel': [{ ... }], 'allCount': 2}
-    res_dic = parse_json(res_json)
+    from json import loads
+    res_dic = loads(res_json)
     result_dic: dict[str, int|list[dict[str, Optional[int|str]]]] = res_dic["result"]
     novel_cnt = cast(int, result_dic["allCount"])
     novel_dic_li = cast(list[dict[str, Optional[int|str]]], result_dic["novel"])
